@@ -10,6 +10,10 @@ import { okWrite } from "./write";
 
 const workspaces = accounts.containers.workspaces;
 
+/** Q27: a new workspace copies the latest saved version, which need not be the live one. */
+export const NEW_WORKSPACE_NOTE =
+	"It starts as a copy of the latest saved version, which may not be the live one (get_live_version); entities already in it are not your changes.";
+
 /** Why a quick preview did not compile, or undefined when it did (the Q20 shapes). */
 export function quickPreviewProblem(response: QuickPreviewResponse | undefined): string | undefined {
 	if (response?.compilerError) return "The workspace does not compile. Fix the errors shown in GTM, then retry.";
@@ -69,7 +73,7 @@ export const workspaceTools: ToolGroup = (tools) => {
 			const w = await workspaces.create(gtm, { parent: containerPath(ids) }, { name, description });
 			return okWrite(
 				{ workspace: { workspaceId: w.workspaceId, name: w.name, description: w.description } },
-				{ note: WORKSPACE_NOT_LIVE_NOTE },
+				{ note: `${NEW_WORKSPACE_NOTE} ${WORKSPACE_NOT_LIVE_NOTE}` },
 			);
 		},
 	);

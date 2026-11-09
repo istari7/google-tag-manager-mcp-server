@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Trigger } from "../../src/gtm/generated";
 import { AUTO_EVENT_FILTER_WARNING, UNPUBLISHED_CHANGES_NOTE } from "../../src/gtm/quirks";
-import { customEventTrigger, linkClickTrigger } from "../fixtures/gtm";
+import { customEventTrigger, errors, linkClickTrigger } from "../fixtures/gtm";
 import {
 	byMethod,
 	callTool,
@@ -206,15 +206,15 @@ describe("update_trigger", () => {
 	it("Q2: a stale fingerprint fails with a conflict and sends no PUT", async () => {
 		const mock = mockGtm(routes());
 		const result = await callTool("update_trigger", { ...TRIGGER_ARGS, name: "x", fingerprint: "1" });
-		expect(result).toMatchObject({ isError: true, text: expect.stringContaining("Changed by someone else") });
+		expect(result).toMatchObject({ isError: true, text: expect.stringContaining("It changed since it was read") });
 		expect(writes(mock.gtm())).toHaveLength(0);
 	});
 });
 
 describe("delete_trigger", () => {
-	it("without confirm only reads: the trigger and the tags that use it", async () => {
-		const mock = mockGtm({
-			[TRIGGER]: byMethod({ GET: () => json(linkClickTrigger) }),
+	/** Tags 12 (fires on 34) and 14 (blocked by 34), trigger group 40 (lists 34); 13 and 41 don't use it. */
+	function usageRoutes() {
+		return {
 			[`${WORKSPACE}/tags`]: pages("tag", [
 				[
 					{ tagId: "12", name: "GA4 - outbound", firingTriggerId: ["34"] },
@@ -222,10 +222,47 @@ describe("delete_trigger", () => {
 				],
 				[{ tagId: "14", name: "Blocked on outbound", firingTriggerId: ["2"], blockingTriggerId: ["34"] }],
 			]),
-		});
+			[`${WORKSPACE}/triggers`]: pages("trigger", [
+				[
+					linkClickTrigger,
+					{
+						triggerId: "40",
+						name: "Group - outbound + scroll",
+						type: "triggerGroup",
+						parameter: [
+							{
+								type: "list",
+								key: "triggerIds",
+								list: [
+									{ type: "triggerReference", value: "34" },
+									{ type: "triggerReference", value: "35" },
+								],
+							},
+						],
+					},
+					{
+						triggerId: "41",
+						name: "Other group",
+						type: "triggerGroup",
+						parameter: [{ type: "list", key: "triggerIds", list: [{ type: "triggerReference", value: "340" }] }],
+					},
+				],
+			]),
+		};
+	}
+
+	it("Q26 without confirm only reads, and lists the tags and trigger groups that use it, saying the delete will fail", async () => {
+		const mock = mockGtm({ [TRIGGER]: byMethod({ GET: () => json(linkClickTrigger) }), ...usageRoutes() });
 		const result = await callTool("delete_trigger", TRIGGER_ARGS);
 		expect(writes(mock.gtm())).toHaveLength(0);
-		expect(result.json()).toMatchObject({
+		expect(
+			mock
+				.gtm()
+				.map((c) => describeCall(c).path)
+				.sort(),
+		).toEqual([TRIGGER, `${WORKSPACE}/tags`, `${WORKSPACE}/tags`, `${WORKSPACE}/triggers`].sort());
+		const out = result.json<{ preview: boolean; wouldDelete: Record<string, unknown> }>();
+		expect(out).toMatchObject({
 			preview: true,
 			wouldDelete: {
 				kind: "trigger",
@@ -233,11 +270,23 @@ describe("delete_trigger", () => {
 				name: "Link - Outbound",
 				type: "linkClick",
 				usedByTags: [
-					{ tagId: "12", name: "GA4 - outbound" },
-					{ tagId: "14", name: "Blocked on outbound" },
+					{ id: "12", name: "GA4 - outbound" },
+					{ id: "14", name: "Blocked on outbound" },
 				],
+				usedByTriggerGroups: [{ id: "40", name: "Group - outbound + scroll" }],
 			},
 		});
+		expect(out.wouldDelete.warning).toContain("GTM will refuse to delete this trigger while these still use it.");
+	});
+
+	it("an unused trigger's preview has no references and no warning", async () => {
+		mockGtm({
+			[TRIGGER]: byMethod({ GET: () => json(linkClickTrigger) }),
+			[`${WORKSPACE}/tags`]: pages("tag", [[{ tagId: "13", name: "Unrelated", firingTriggerId: ["2"] }]]),
+			[`${WORKSPACE}/triggers`]: pages("trigger", [[linkClickTrigger]]),
+		});
+		const out = (await callTool("delete_trigger", TRIGGER_ARGS)).json<{ wouldDelete: Record<string, unknown> }>();
+		expect(Object.keys(out.wouldDelete).sort()).toEqual(["kind", "name", "parentFolderId", "triggerId", "type"]);
 	});
 
 	it("with confirm: true sends one DELETE", async () => {
@@ -245,5 +294,30 @@ describe("delete_trigger", () => {
 		const result = await callTool("delete_trigger", { ...TRIGGER_ARGS, confirm: true });
 		expect(mock.gtm().map(describeCall)).toMatchObject([{ method: "DELETE", path: TRIGGER, query: {} }]);
 		expect(result.json()).toEqual({ deleted: { kind: "trigger", id: "34" }, note: UNPUBLISHED_CHANGES_NOTE });
+	});
+
+	it("Q26 with confirm: true, GTM's bare 400 becomes an error naming what still uses the trigger", async () => {
+		const mock = mockGtm({
+			[TRIGGER]: byMethod({ DELETE: () => json(errors.stillInUse400, 400) }),
+			...usageRoutes(),
+		});
+		const result = await callTool("delete_trigger", { ...TRIGGER_ARGS, confirm: true });
+		expect(writes(mock.gtm()).map(describeCall)).toMatchObject([{ method: "DELETE", path: TRIGGER }]);
+		expect(result.isError).toBe(true);
+		expect(result.text).toBe(
+			'Nothing was deleted: GTM refuses to delete trigger 34 while it is still used by tags 12 "GA4 - outbound", 14 "Blocked on outbound"; trigger groups 40 "Group - outbound + scroll". First remove it from those tags\' firingTriggerId/blockingTriggerId (update_tag) and from those trigger groups, or delete them.',
+		);
+	});
+
+	it("Q26 a 400 with no reference found still says what usually causes it", async () => {
+		mockGtm({
+			[TRIGGER]: byMethod({ DELETE: () => json(errors.stillInUse400, 400) }),
+			[`${WORKSPACE}/tags`]: pages("tag", [[]]),
+			[`${WORKSPACE}/triggers`]: pages("trigger", [[]]),
+		});
+		const result = await callTool("delete_trigger", { ...TRIGGER_ARGS, confirm: true });
+		expect(result.isError).toBe(true);
+		expect(result.text).toContain("Nothing was deleted: GTM refused to delete trigger 34.");
+		expect(result.text).toContain("something still uses it (Q26)");
 	});
 });

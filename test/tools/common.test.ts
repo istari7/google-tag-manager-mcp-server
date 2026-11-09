@@ -44,6 +44,25 @@ const CASES: Case[] = [
 	{ tool: "list_versions", args: CONTAINER_ARGS, path: `${CONTAINER}/version_headers` },
 ];
 
+/** What a 404 tells the model to check: the IDs in that path, innermost first. */
+const CONTAINER_HINT = "Check the container ID, then the account ID.";
+const WORKSPACE_HINT = "Check the workspace ID, then the account/container IDs.";
+const NOT_FOUND_HINTS: Record<string, string> = {
+	list_containers: "Check the account ID.",
+	get_container_snippet: CONTAINER_HINT,
+	list_workspaces: CONTAINER_HINT,
+	get_workspace_status: WORKSPACE_HINT,
+	list_tags: WORKSPACE_HINT,
+	get_tag: "Check the tag ID, then the account/container/workspace IDs.",
+	list_triggers: WORKSPACE_HINT,
+	get_trigger: "Check the trigger ID, then the account/container/workspace IDs.",
+	list_variables: WORKSPACE_HINT,
+	get_variable: "Check the variable ID, then the account/container/workspace IDs.",
+	list_folders: WORKSPACE_HINT,
+	list_built_in_variables: WORKSPACE_HINT,
+	list_versions: CONTAINER_HINT,
+};
+
 const BAD_IDS = ["abc", "1/../2", "12?x=1", "", "GTM-ABC1234"];
 
 /** Write tools with the smallest valid arguments: every ID must be checked before any call. */
@@ -120,7 +139,7 @@ describe.each(CASES)("$tool", ({ tool, args, path }) => {
 			const result = await callTool(tool, args);
 			expect(result).toMatchObject({
 				isError: true,
-				text: `Not found: ${path}. Check the account/container/workspace IDs.`,
+				text: `Not found: ${path}. ${NOT_FOUND_HINTS[tool]}`,
 			});
 		});
 	}

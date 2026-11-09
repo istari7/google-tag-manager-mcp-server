@@ -49,7 +49,7 @@ Add an entry whenever manual testing turns up something new, with a test.
   `Q2 the PUT carries ?fingerprint=<stored> and no body fingerprint…`,
   `Q2 a stale expectedFingerprint fails with a conflict before any write`,
   `Q2 a matching expectedFingerprint goes ahead`,
-  `Q2 a 409 from Google during the PUT surfaces as 'changed by someone else'…`;
+  `Q2 a 409 from Google during the PUT surfaces as a conflict…`;
   client: `Q2: tags.update sends the fingerprint as a query parameter, not in the body`,
   `omits an undefined fingerprint entirely`;
   tools/tags: `Q2: a stale fingerprint fails with a conflict and sends no PUT`,
@@ -274,7 +274,7 @@ Add an entry whenever manual testing turns up something new, with a test.
   A retried POST (`create_tag`, `create_version`, `quick_preview`,
   `move_entities_to_folder`, …) can then apply twice or make
   a duplicate, and a retried PUT carries the old `?fingerprint=` (Q2), so it
-  comes back as a false "changed by someone else". Instead, a 5xx on a
+  comes back as a false conflict. Instead, a 5xx on a
   write says the write may or may not have been applied and tells the model
   to re-read the entity before retrying.
 - **Tests:** `Q16 a plain permission 403 is not retried; a rate-limit 403 is`;
@@ -376,14 +376,24 @@ Add an entry whenever manual testing turns up something new, with a test.
   destination Google tag (e.g. "Google Analytics G-…") plus `gtagConfig`
   entries in the workspace, even when the created tag is paused. Deleting
   those tags does not remove the `gtagConfig` entries (confirmed live).
-- **We:** the `tags` best-practices topic tells the model to check
-  `get_workspace_status` for the extra Google tag after creating one of these
-  tags and to point it out to the user. To clean up, delete the auto-created
-  Google tag with `delete_tag` and the leftover configs (seen live:
-  `ogt_auto_events`, `ogt_1p_data_v2`) with `list_gtag_configs` /
-  `delete_gtag_config`; that leaves the workspace with no trace (confirmed
-  live, 2026-11-09).
-- **Tests:** tools/gtag-configs (requests and confirm gating).
+- **We:** for these types (`gaawe`, `awct`, `sp`, `flc`, `fls`), `create_tag`
+  reads the workspace status before and after the POST (2 extra GETs) and
+  returns every entity that appeared in between, other than the new tag, as
+  `alsoChangedByGtm`, with a warning that counts the unpaused tags among them.
+  `update_tag` does the same when the update sets one of these types, or
+  changes `parameter` (a new measurement ID) on a tag that ends up as one of
+  them; it skips the second read if the tag is another type. If a status read
+  fails, the tool still returns the saved tag, with a warning to check
+  `get_workspace_status`. Which of these types make GTM add a Google tag is
+  confirmed live only for `gaawe`; the others follow Google's docs. The
+  `tags` best-practices topic also tells the model to point the Google tag out
+  to the user. To clean up, delete the auto-created Google tag with
+  `delete_tag` and the leftover configs (seen live: `ogt_auto_events`,
+  `ogt_1p_data_v2`) with `list_gtag_configs` / `delete_gtag_config`; that
+  leaves the workspace with no trace (confirmed live, 2026-11-09).
+- **Tests:** tools/tags: `Q23 GTM's own Google tag and gtagConfigs` (the
+  status reads, the reported entities and warning, html skips the reads, a
+  failed status read); tools/gtag-configs (requests and confirm gating).
 
 ## Workspace lifecycle
 
@@ -410,3 +420,41 @@ Add an entry whenever manual testing turns up something new, with a test.
   confirmed, it moves them out of any folder (`move_entities_to_folder` to
   folder `0`, Q19), then deletes the folder, so nothing in it is lost.
 - **Tests:** tools/folders: `Q25 with confirm: true moves the contents out (folder 0) before the DELETE`.
+
+### Q26. A trigger or variable that is still in use can't be deleted
+
+- **Google:** `triggers.delete` on a trigger that a tag fires on, and
+  `variables.delete` on a variable a tag refers to as `{{Name}}` in a
+  parameter, fail with the same bare 400 as Q25 ("Returned an error response
+  for your request"), which doesn't say why. Once the tag is gone, the same
+  call succeeds (both confirmed live, 2026-11-09). We assume the same for a
+  trigger used as a blocking trigger or in a trigger group, and for a
+  variable used in a trigger condition or another variable (not verified
+  live).
+- **We:** the `delete_trigger` preview lists the tags that fire on or are
+  blocked by the trigger and the trigger groups that list it
+  (`triggerReference`); the `delete_variable` preview lists the tags,
+  triggers and other variables whose fields (not name or notes) contain
+  `{{Name}}`. When there are any, the preview warns that GTM will refuse the
+  delete until they are removed. When a confirmed delete still gets a 400, the
+  tool looks the references up again and returns them in the error, with how
+  to remove them; with none found, it says what usually causes the 400.
+  References from places we don't scan (zones, clients, transformations,
+  custom templates) are not detected.
+- **Tests:** tools/triggers: `Q26 without confirm only reads, and lists the tags and trigger groups…`,
+  `Q26 with confirm: true, GTM's bare 400 becomes an error naming what still uses the trigger`,
+  `Q26 a 400 with no reference found still says what usually causes it`;
+  tools/variables: `Q26 without confirm only reads, and lists what uses {{name}}…`,
+  `Q26 with confirm: true, GTM's bare 400 becomes an error naming what still uses the variable`.
+
+### Q27. A new workspace starts from the latest saved version, not the live one
+
+- **Google:** `workspaces.create` bases the new workspace on the container's
+  latest version, even when that version was never published. Seen live
+  (2026-11-09): with version 1 live and an unpublished version 2, a new
+  workspace already held version 2's tags, triggers and variables.
+- **We:** `create_workspace`'s result says so, so the model doesn't take
+  those entities for its own changes or assume they are live. To see what is
+  live, use `get_live_version`.
+- **Tests:** tools/workspaces: `create_workspace POSTs name and description…`
+  (the note).

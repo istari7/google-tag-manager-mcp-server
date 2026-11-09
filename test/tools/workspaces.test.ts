@@ -4,6 +4,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GetWorkspaceStatusResponse } from "../../src/gtm/generated";
 import { WORKSPACE_NOT_LIVE_NOTE } from "../../src/tools/summaries";
+import { NEW_WORKSPACE_NOTE } from "../../src/tools/workspaces";
 import { errors, folder, ga4EventTag, linkClickTrigger } from "../fixtures/gtm";
 import {
 	byMethod,
@@ -103,7 +104,7 @@ describe("get_workspace_status", () => {
 });
 
 describe("create_workspace", () => {
-	it("POSTs {container}/workspaces with the name and description", async () => {
+	it("create_workspace POSTs name and description, and says it starts from the latest version (Q27)", async () => {
 		const mock = mockGtm({
 			[`${CONTAINER}/workspaces`]: reply({
 				workspaceId: "9",
@@ -129,7 +130,7 @@ describe("create_workspace", () => {
 		]);
 		expect(result.json()).toEqual({
 			workspace: { workspaceId: "9", name: "Add GA4 purchase", description: "Checkout" },
-			note: WORKSPACE_NOT_LIVE_NOTE,
+			note: `${NEW_WORKSPACE_NOTE} ${WORKSPACE_NOT_LIVE_NOTE}`,
 		});
 	});
 });

@@ -15,10 +15,13 @@ import {
 	parametersInput,
 	workspaceInput,
 } from "./inputs";
+import { referencePreview, rejectedDeleteMessage, triggerReferences } from "./references";
 import { isEmptyPatch, okWrite } from "./write";
 
 const triggers = accounts.containers.workspaces.triggers;
-const tags = accounts.containers.workspaces.tags;
+
+const TRIGGER_FIX =
+	"First remove it from those tags' firingTriggerId/blockingTriggerId (update_tag) and from those trigger groups, or delete them.";
 
 /** One list_triggers row; also the delete_trigger preview. */
 export function triggerRow(t: Trigger) {
@@ -152,18 +155,11 @@ export const triggerTools: ToolGroup = (tools) => {
 	addDeleteTool(tools, trigger, {
 		name: "delete_trigger",
 		description:
-			"Delete a trigger from a workspace. Without confirm: true, only shows what would be deleted and which tags use it.",
-		// Tags that fire on or are blocked by this trigger lose it when it is deleted.
-		related: async (ids, { gtm }) => {
-			const parent = workspacePath(ids);
-			const list = await gtm.listAll(
-				(pageToken) => tags.list(gtm, { parent, pageToken }),
-				(page) => page.tag,
-			);
-			const usedByTags = list.items
-				.filter((t) => t.firingTriggerId?.includes(ids.triggerId) || t.blockingTriggerId?.includes(ids.triggerId))
-				.map((t) => ({ tagId: t.tagId, name: t.name }));
-			return { usedByTags };
-		},
+			"Delete a trigger from a workspace. Without confirm: true, only shows what would be deleted and what uses it.",
+		// Q26: GTM refuses to delete a trigger that tags (or trigger groups) still use.
+		related: async (ids, { gtm }) =>
+			referencePreview("trigger", await triggerReferences(gtm, ids, ids.triggerId), TRIGGER_FIX),
+		rejected: async (ids, { gtm }) =>
+			rejectedDeleteMessage("trigger", ids.triggerId, await triggerReferences(gtm, ids, ids.triggerId), TRIGGER_FIX),
 	});
 };

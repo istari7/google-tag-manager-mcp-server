@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from "vitest";
 import { listAll } from "../src/gtm/client";
+import { MESSAGES } from "../src/gtm/errors";
 import { accounts, type Tag, type Trigger, type Variable } from "../src/gtm/generated";
 import {
 	createTag,
@@ -121,13 +122,11 @@ describe("Q2 fingerprint is a query parameter", () => {
 		expect(calls).toHaveLength(2);
 	});
 
-	it("Q2 a 409 from Google during the PUT surfaces as 'changed by someone else' and is not retried", async () => {
+	it("Q2 a 409 from Google during the PUT surfaces as a conflict and is not retried", async () => {
 		const { client, calls } = testClient((call) =>
 			call.method === "GET" ? json(200, ga4EventTag) : json(409, errors.fingerprint409),
 		);
-		await expect(updateTag(client, TAG_PATH, { name: "x" })).rejects.toThrow(
-			"Changed by someone else since it was read. Re-read and retry.",
-		);
+		await expect(updateTag(client, TAG_PATH, { name: "x" })).rejects.toThrow(MESSAGES.conflict);
 		expect(calls).toHaveLength(2);
 	});
 });

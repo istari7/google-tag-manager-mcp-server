@@ -2,9 +2,10 @@
 // get-merge-put (Q1/Q2/Q7/Q12/Q13), consent settings (Q14) and confirm gating.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { MESSAGES } from "../../src/gtm/errors";
 import type { Tag } from "../../src/gtm/generated";
 import { UNPUBLISHED_CHANGES_NOTE } from "../../src/gtm/quirks";
-import { tagRow } from "../../src/tools/tags";
+import { AUTO_GOOGLE_TAG_UNCHECKED, tagRow } from "../../src/tools/tags";
 import { errors, ga4EventTag } from "../fixtures/gtm";
 import {
 	byMethod,
@@ -37,6 +38,8 @@ function tagRoutes() {
 			GET: () => json(ga4EventTag),
 			PUT: (call) => json({ ...(JSON.parse(call.body) as Tag), fingerprint: "1731100000099" }),
 		}),
+		// Q23: read before and after a gaawe update that changes parameters; nothing new here.
+		[`${WORKSPACE}/status`]: reply({}),
 	};
 }
 
@@ -44,6 +47,7 @@ describe("create_tag", () => {
 	it("POSTs {workspace}/tags with exactly the given fields and Q14 consent settings", async () => {
 		const mock = mockGtm({
 			[`${WORKSPACE}/tags`]: (call) => json({ ...(JSON.parse(call.body) as Tag), tagId: "77", fingerprint: "1" }),
+			[`${WORKSPACE}/status`]: reply({}),
 		});
 		const result = await callTool("create_tag", {
 			...WORKSPACE_ARGS,
@@ -58,8 +62,13 @@ describe("create_tag", () => {
 			consentTypes: ["ad_storage", " analytics_storage "],
 			parentFolderId: "9",
 		});
-		expect(mock.gtm()).toHaveLength(1);
-		expect(describeCall(mock.gtm()[0])).toMatchObject({
+		// Q23: gaawe, so the workspace status is read before and after the POST.
+		expect(mock.gtm().map((c) => describeCall(c).path)).toEqual([
+			`${WORKSPACE}/status`,
+			`${WORKSPACE}/tags`,
+			`${WORKSPACE}/status`,
+		]);
+		expect(describeCall(mock.gtm()[1])).toMatchObject({
 			method: "POST",
 			path: `${WORKSPACE}/tags`,
 			query: {},
@@ -85,10 +94,108 @@ describe("create_tag", () => {
 			},
 		});
 		// No IDs from the tool arguments leak into the body.
-		expect(describeCall(mock.gtm()[0]).body).not.toHaveProperty("accountId");
+		expect(describeCall(mock.gtm()[1]).body).not.toHaveProperty("accountId");
 		const out = result.json<{ tag: Tag; note: string }>();
 		expect(out.tag).toMatchObject({ tagId: "77", name: "GA4 - Event - purchase" });
+		expect(out).not.toHaveProperty("warnings");
 		expect(out.note).toBe(UNPUBLISHED_CHANGES_NOTE);
+	});
+
+	describe("Q23 GTM's own Google tag and gtagConfigs", () => {
+		const existing = { changeStatus: "added", tag: { tagId: "5", name: "Mine", type: "html" } };
+		/** Status: before the POST only tag 5; after it also tag 77 (ours), Google tag 79 and gtagConfigs 80/81. */
+		function statusRoutes() {
+			let reads = 0;
+			return {
+				[`${WORKSPACE}/tags`]: (call: { body: string }) =>
+					json({ ...(JSON.parse(call.body) as Tag), tagId: "77", fingerprint: "1" }),
+				[`${WORKSPACE}/status`]: () =>
+					json({
+						workspaceChange:
+							reads++ === 0
+								? [existing]
+								: [
+										existing,
+										{
+											changeStatus: "added",
+											tag: { tagId: "77", name: "GA4 - purchase", type: "gaawe", paused: true },
+										},
+										{ changeStatus: "added", tag: { tagId: "79", name: "Google Analytics G-ABC", type: "googtag" } },
+										{ changeStatus: "added", gtagConfig: { gtagConfigId: "80", type: "ogt_auto_events" } },
+										{ changeStatus: "added", gtagConfig: { gtagConfigId: "81", type: "ogt_1p_data_v2" } },
+									],
+					}),
+			};
+		}
+
+		it("a gaawe create reports what GTM added by itself, with a warning about the unpaused Google tag", async () => {
+			mockGtm(statusRoutes());
+			const result = await callTool("create_tag", {
+				...WORKSPACE_ARGS,
+				name: "GA4 - purchase",
+				type: "gaawe",
+				paused: true,
+			});
+			const out = result.json<{ alsoChangedByGtm: unknown[]; warnings: string[] }>();
+			expect(out.alsoChangedByGtm).toEqual([
+				{
+					kind: "tag",
+					id: "79",
+					name: "Google Analytics G-ABC",
+					type: "googtag",
+					paused: false,
+					changeStatus: "added",
+				},
+				{ kind: "gtagConfig", id: "80", type: "ogt_auto_events", changeStatus: "added" },
+				{ kind: "gtagConfig", id: "81", type: "ogt_1p_data_v2", changeStatus: "added" },
+			]);
+			expect(out.warnings).toEqual([
+				"GTM also changed 3 other entities by itself (Q23, see alsoChangedByGtm), including 1 unpaused tag(s). They go live with this workspace when it is published. Tell the user; remove unwanted ones with delete_tag / delete_gtag_config.",
+			]);
+		});
+
+		it("an html create reads no workspace status", async () => {
+			const mock = mockGtm(statusRoutes());
+			const result = await callTool("create_tag", { ...WORKSPACE_ARGS, name: "x", type: "html" });
+			expect(mock.gtm().map((c) => describeCall(c).path)).toEqual([`${WORKSPACE}/tags`]);
+			expect(result.json()).not.toHaveProperty("warnings");
+		});
+
+		it("when the status can't be read, the create still succeeds with a check-it-yourself warning", async () => {
+			mockGtm({
+				[`${WORKSPACE}/tags`]: (call) => json({ ...(JSON.parse(call.body) as Tag), tagId: "77", fingerprint: "1" }),
+				[`${WORKSPACE}/status`]: reply(errors.forbidden403, 403),
+			});
+			const result = await callTool("create_tag", { ...WORKSPACE_ARGS, name: "Ads", type: "awct" });
+			expect(result.isError).toBe(false);
+			expect(result.json<{ warnings: string[] }>().warnings).toEqual([AUTO_GOOGLE_TAG_UNCHECKED]);
+		});
+
+		it("an update that makes a tag gaawe reads the status before and after", async () => {
+			let reads = 0;
+			const mock = mockGtm({
+				[TAG]: byMethod({
+					GET: () => json({ ...ga4EventTag, type: "html" }),
+					PUT: (call) => json({ ...(JSON.parse(call.body) as Tag), fingerprint: "2" }),
+				}),
+				[`${WORKSPACE}/status`]: () =>
+					json(
+						reads++ === 0
+							? {}
+							: { workspaceChange: [{ changeStatus: "added", gtagConfig: { gtagConfigId: "80", type: "x" } }] },
+					),
+			});
+			const result = await callTool("update_tag", { ...TAG_ARGS, type: "gaawe" });
+			expect(mock.gtm().map((c) => `${c.method} ${describeCall(c).path}`)).toEqual([
+				`GET ${WORKSPACE}/status`,
+				`GET ${TAG}`,
+				`PUT ${TAG}`,
+				`GET ${WORKSPACE}/status`,
+			]);
+			expect(result.json()).toMatchObject({
+				alsoChangedByGtm: [{ kind: "gtagConfig", id: "80", type: "x", changeStatus: "added" }],
+			});
+		});
 	});
 
 	it("refuses consentTypes without consentStatus, before calling Google", async () => {
@@ -139,11 +246,13 @@ describe("update_tag", () => {
 		const result = await callTool("update_tag", { ...TAG_ARGS, parameter, fingerprint: STORED_FINGERPRINT });
 		const calls = mock.gtm().map(describeCall);
 		expect(calls.map((c) => [c.method, c.path, c.query])).toEqual([
+			["GET", `${WORKSPACE}/status`, {}],
 			["GET", TAG, {}],
 			["PUT", TAG, { fingerprint: STORED_FINGERPRINT }],
+			["GET", `${WORKSPACE}/status`, {}],
 		]);
 		// Everything the patch didn't mention is sent back unchanged; no body fingerprint.
-		expect(calls[1]?.body).toEqual({ ...storedBody, parameter });
+		expect(calls[2]?.body).toEqual({ ...storedBody, parameter });
 		const out = result.json<{ tag: Tag; note: string }>();
 		expect(out.tag.fingerprint).toBe("1731100000099");
 		expect(out.tag).not.toHaveProperty("tagManagerUrl");
@@ -223,7 +332,7 @@ describe("update_tag", () => {
 		const result = await callTool("update_tag", { ...TAG_ARGS, name: "Renamed", fingerprint: "1700000000000" });
 		expect(result).toMatchObject({
 			isError: true,
-			text: "Changed by someone else since it was read. Re-read and retry.",
+			text: MESSAGES.conflict,
 		});
 		expect(mock.gtm().map((c) => c.method)).toEqual(["GET"]);
 	});
@@ -234,7 +343,7 @@ describe("update_tag", () => {
 		});
 		const result = await callTool("update_tag", { ...TAG_ARGS, name: "Renamed" });
 		expect(result.isError).toBe(true);
-		expect(result.text).toContain("Changed by someone else since it was read.");
+		expect(result.text).toContain("It changed since it was read");
 		expect(mock.gtm().map((c) => c.method)).toEqual(["GET", "PUT"]);
 	});
 

@@ -10,7 +10,7 @@ import {
 	MAX_RETRIES,
 	resolveApiUrl,
 } from "../src/gtm/client";
-import { GtmApiError, MESSAGES, toGtmApiError } from "../src/gtm/errors";
+import { GtmApiError, MESSAGES, notFoundHint, toGtmApiError } from "../src/gtm/errors";
 import { accounts, methods, type Tag } from "../src/gtm/generated";
 import {
 	accountPath,
@@ -222,10 +222,29 @@ describe("error mapping", () => {
 
 	it("404 → not found with the path; generic 'Not Found' is dropped", () => {
 		const e = map(404, errors.notFound404, `${TAG_PATH}?fingerprint=1`);
-		expect(e.message).toBe(`Not found: ${TAG_PATH}. Check the account/container/workspace IDs.`);
+		expect(e.message).toBe(`Not found: ${TAG_PATH}. Check the tag ID, then the account/container/workspace IDs.`);
 	});
 
-	it("409 and 412 → changed by someone else", () => {
+	it.each([
+		["accounts/1", "Check the account ID."],
+		["accounts/1/containers/2/versions/999", "Check the version ID, then the account/container IDs."],
+		["accounts/1/containers/2/versions/999:publish", "Check the version ID, then the account/container IDs."],
+		[
+			"accounts/1/containers/2/workspaces/3/folders/4",
+			"Check the folder ID, then the account/container/workspace IDs.",
+		],
+		[
+			"accounts/1/containers/2/workspaces/3/gtag_config/4",
+			"Check the Google tag config ID, then the account/container/workspace IDs.",
+		],
+		["accounts/1/user_permissions/5", "Check the user permission ID, then the account ID."],
+		["accounts/containers:lookup", "Check the IDs in this path."],
+	])("404 on %s names the IDs in that path", (path, hint) => {
+		expect(notFoundHint(path)).toBe(hint);
+		expect(map(404, errors.notFound404, path).message).toBe(`Not found: ${path}. ${hint}`);
+	});
+
+	it("409 and 412 → changed since it was read", () => {
 		expect(map(409, errors.fingerprint409).message).toBe(MESSAGES.conflict);
 		expect(map(412, errors.precondition412).message).toBe(MESSAGES.conflict);
 	});

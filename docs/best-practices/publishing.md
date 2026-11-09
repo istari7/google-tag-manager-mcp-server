@@ -24,8 +24,8 @@ in the GTM UI.
 - Before an update, fetch the entity with `get_*`. Send only the fields that
   change, together with the `fingerprint` you just read. Omitted fields are
   kept; a list you send replaces the stored list, and `[]` empties it.
-- A fingerprint conflict means someone else edited the entity in the
-  meantime. Fetch it again and redo your change on top; never try to force it.
+- A fingerprint conflict means it changed since you read it (maybe by your
+  own earlier call). Fetch it again and redo your change; never force it.
 - `delete_*` tools, `disable_built_in_variables` and `set_user_permission`
   do nothing without `confirm: true`. Call them without it first, show the
   user the preview, and confirm only after they agree.

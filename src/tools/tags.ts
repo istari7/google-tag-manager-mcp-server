@@ -1,14 +1,72 @@
 import { z } from "zod";
-import { accounts, type Tag } from "../gtm/generated";
+import type { GtmClient } from "../gtm/client";
+import { accounts, type Entity, type Tag } from "../gtm/generated";
 import { createTag, updateTag } from "../gtm/merge";
 import { tagPath, workspacePath } from "../gtm/paths";
 import type { ToolGroup } from "../mcp/registry";
 import { fail } from "../mcp/result";
 import { addDeleteTool, addGetTool, addListTool, workspaceEntity } from "./entity";
 import { fingerprintInput, gtmId, idList, nameInput, notesInput, parametersInput, workspaceInput } from "./inputs";
+import { describeEntity } from "./summaries";
 import { isEmptyPatch, okWrite } from "./write";
 
 const tags = accounts.containers.workspaces.tags;
+
+/**
+ * Tag types for which GTM may create an unpaused Google tag and gtagConfigs by itself (Q23):
+ * GA4 event, Google Ads conversion and remarketing, Floodlight counter and sales.
+ */
+export const GOOGLE_TAG_CREATING_TYPES: ReadonlySet<string> = new Set(["gaawe", "awct", "sp", "flc", "fls"]);
+
+export const AUTO_GOOGLE_TAG_UNCHECKED =
+	"GTM may also have created an unpaused Google tag and Google tag configs for this tag (Q23). Check get_workspace_status and tell the user.";
+
+const entityKey = (e: Entity) => {
+	const d = describeEntity(e);
+	return `${d?.kind}:${d?.id ?? d?.name}`;
+};
+
+/** The workspace's changed entities, or undefined if the status can't be read. */
+async function changedEntities(gtm: GtmClient, path: string): Promise<Entity[] | undefined> {
+	try {
+		return (await accounts.containers.workspaces.getStatus(gtm, { path }))?.workspaceChange ?? [];
+	} catch {
+		return undefined;
+	}
+}
+
+/**
+ * Q23: what GTM added or changed by itself while it saved `saved`, found by comparing the
+ * workspace status before and after (two GETs). Returns the extra result fields and warning.
+ */
+async function autoCreated(
+	gtm: GtmClient,
+	path: string,
+	before: Entity[] | undefined,
+	saved: Tag,
+): Promise<{ fields: Record<string, unknown>; warnings: string[] }> {
+	const after = before && (await changedEntities(gtm, path));
+	if (!before || !after) return { fields: {}, warnings: [AUTO_GOOGLE_TAG_UNCHECKED] };
+	const known = new Set(before.map(entityKey));
+	known.add(`tag:${saved.tagId}`);
+	const extra = after
+		.filter((e) => !known.has(entityKey(e)))
+		.map((e) => ({
+			kind: "unknown",
+			...describeEntity(e),
+			type: e.tag?.type ?? e.gtagConfig?.type,
+			paused: e.tag ? e.tag.paused === true : undefined,
+			changeStatus: e.changeStatus,
+		}));
+	if (extra.length === 0) return { fields: {}, warnings: [] };
+	const activeTags = extra.filter((e) => e.kind === "tag" && !e.paused).length;
+	return {
+		fields: { alsoChangedByGtm: extra },
+		warnings: [
+			`GTM also ${extra.length === 1 ? "changed 1 other entity" : `changed ${extra.length} other entities`} by itself (Q23, see alsoChangedByGtm)${activeTags > 0 ? `, including ${activeTags} unpaused tag(s)` : ""}. They go live with this workspace when it is published. Tell the user; remove unwanted ones with delete_tag / delete_gtag_config.`,
+		],
+	};
+}
 
 /** One list_tags row; also the delete_tag preview. `paused` only when true (the description says so). */
 export function tagRow(t: Tag) {
@@ -83,8 +141,13 @@ export const tagTools: ToolGroup = (tools) => {
 			annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 		},
 		async ({ accountId, containerId, workspaceId, ...fields }, { gtm }) => {
-			const { result, warnings } = await createTag(gtm, workspacePath({ accountId, containerId, workspaceId }), fields);
-			return okWrite({ tag: result }, { warnings });
+			const parent = workspacePath({ accountId, containerId, workspaceId });
+			const watch = GOOGLE_TAG_CREATING_TYPES.has(fields.type);
+			const before = watch ? await changedEntities(gtm, parent) : undefined;
+			const { result, warnings } = await createTag(gtm, parent, fields);
+			if (!watch) return okWrite({ tag: result }, { warnings });
+			const auto = await autoCreated(gtm, parent, before, result);
+			return okWrite({ tag: result, ...auto.fields }, { warnings: [...warnings, ...auto.warnings] });
 		},
 	);
 
@@ -102,8 +165,16 @@ export const tagTools: ToolGroup = (tools) => {
 		async ({ accountId, containerId, workspaceId, tagId, fingerprint, ...fields }, { gtm }) => {
 			if (isEmptyPatch(fields)) return fail("Nothing to update: pass at least one tag field.");
 			const path = tagPath({ accountId, containerId, workspaceId, tagId });
+			// Q23: only a new type or new parameters (e.g. a measurement ID) can make GTM add a
+			// Google tag. The stored type is unknown until updateTag's GET, so check by result.
+			const watch =
+				fields.type !== undefined ? GOOGLE_TAG_CREATING_TYPES.has(fields.type) : fields.parameter !== undefined;
+			const parent = workspacePath({ accountId, containerId, workspaceId });
+			const before = watch ? await changedEntities(gtm, parent) : undefined;
 			const { result, warnings } = await updateTag(gtm, path, fields, { expectedFingerprint: fingerprint });
-			return okWrite({ tag: result }, { warnings });
+			if (!watch || !GOOGLE_TAG_CREATING_TYPES.has(result.type ?? "")) return okWrite({ tag: result }, { warnings });
+			const auto = await autoCreated(gtm, parent, before, result);
+			return okWrite({ tag: result, ...auto.fields }, { warnings: [...warnings, ...auto.warnings] });
 		},
 	);
 
