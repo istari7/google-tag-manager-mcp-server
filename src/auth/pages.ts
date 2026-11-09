@@ -91,15 +91,18 @@ export interface SetupStatus {
 	rateLimits: boolean;
 	/** Google scopes requested at sign-in (GOOGLE_SCOPES plus openid/email/profile). */
 	scopes: string[];
+	/** GTM_TOOL_GROUPS: the enabled groups, or why the value is invalid (every /mcp request then fails). */
+	toolGroups: { groups: string[]; isDefault: boolean } | { error: string };
 }
 
-/** Same conditions as the "Server not configured" checks in handler.ts. */
+/** Same conditions as the "Server not configured" checks in handler.ts, plus valid tool groups. */
 export function setupReady(s: SetupStatus): boolean {
 	return (
 		s.googleClientId !== "missing" &&
 		s.googleClientSecret &&
 		s.cookieSecret === "ok" &&
-		(s.allowedEmails || s.allowedDomains)
+		(s.allowedEmails || s.allowedDomains) &&
+		!("error" in s.toolGroups)
 	);
 }
 
@@ -131,12 +134,17 @@ function checks(s: SetupStatus): string {
 	}[s.cookieSecret];
 	const allowlist = s.allowedEmails || s.allowedDomains;
 	const lists = `<code>ALLOWED_EMAILS</code> ${s.allowedEmails ? "set" : "not set"}, <code>ALLOWED_DOMAINS</code> ${s.allowedDomains ? "set" : "not set"}`;
+	const groups =
+		"error" in s.toolGroups
+			? `${tick(false)} <code>GTM_TOOL_GROUPS</code>: ${escapeHtml(s.toolGroups.error)} Until it is fixed, every MCP request fails.`
+			: `${tick(true)} Tool groups${s.toolGroups.isDefault ? " (default)" : ""}: ${s.toolGroups.groups.map((g) => `<code>${escapeHtml(g)}</code>`).join(", ")}`;
 	return `<ul class="checks">
 <li>${clientId}</li>
 <li>${tick(s.googleClientSecret)} <code>GOOGLE_CLIENT_SECRET</code>: ${s.googleClientSecret ? "set" : "not set"}</li>
 <li>${cookie}</li>
 <li>${tick(allowlist)} Sign-in allowlist: ${lists}${allowlist ? "" : ". Every sign-in is refused until one is set."}</li>
 <li>${s.rateLimits ? "✅ Rate limiting: on" : "⚠️ Rate limiting: off (a <code>AUTH_RATE_LIMITER</code> / <code>TOKEN_RATE_LIMITER</code> / <code>MCP_RATE_LIMITER</code> binding is missing)"}</li>
+<li>${groups}</li>
 </ul>`;
 }
 

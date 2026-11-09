@@ -110,7 +110,7 @@ export const accountTools: ToolGroup = (tools) => {
 	tools.add(
 		"list_accounts",
 		{
-			description: "List the Google Tag Manager accounts the connected user can access.",
+			description: "List the GTM accounts the connected user can access.",
 			input: NO_INPUT,
 			annotations: { readOnlyHint: true },
 		},
@@ -158,7 +158,7 @@ export const accountTools: ToolGroup = (tools) => {
 	tools.add(
 		"list_containers",
 		{
-			description: "List the containers in a GTM account, with their public IDs (GTM-XXXX) and usage context.",
+			description: "List an account's containers with their public IDs (GTM-XXXX) and usage context.",
 			input: accountInput,
 			annotations: { readOnlyHint: true },
 		},

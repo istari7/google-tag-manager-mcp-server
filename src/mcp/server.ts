@@ -6,7 +6,8 @@
 //        tools.add("delete_tag", { description, input, annotations }, async (args, ctx) => ...);
 //      };
 //    A file may hold reads and writes; add new tools to the existing group for that entity.
-//    A new group needs one line in TOOL_GROUPS (src/tools/index.ts). For a workspace entity,
+//    A new file needs one line in TOOL_MODULES (src/tools/index.ts), tagged with its
+//    GTM_TOOL_GROUPS group (names in src/tools/groups.ts). For a workspace entity,
 //    list_* / get_* / delete_* come from src/tools/entity.ts (see tags.ts); write create and
 //    update by hand, after reading GTM_API_QUIRKS.md.
 // 2. `input` is a zod object. Build it from src/tools/inputs.ts (`workspaceInput.extend({
@@ -26,7 +27,8 @@
 //    use confirmGate / okPreview / deleteWithConfirm from src/tools/confirm.ts.
 //    delete_container also wants the container's public ID typed back.
 // 7. Tests: test/tools/<group>.test.ts with the helpers in test/tools/helpers.ts (assert the
-//    outgoing request). Then `pnpm test -u` for the tools/list snapshot, and keep it < 40 KB.
+//    outgoing request). Then `pnpm test -u` for the tools/list snapshot, and keep the default
+//    groups' tools/list < 40 KB (`pnpm tools-report` shows the bytes per group).
 // ──────────────────────────────────────────────────────────────────────────────────────────
 
 import { McpServer } from "@modelcontextprotocol/server";
@@ -34,24 +36,43 @@ import { createMcpHandler } from "agents/mcp";
 import { version } from "../../package.json";
 import type { Env, Props } from "../env";
 import { registerBestPractices } from "../resources/best-practices";
-import { TOOL_GROUPS } from "../tools";
+import { toolModulesFor } from "../tools";
+import { parseToolGroups, type ToolGroupSelection, ToolGroupsError } from "../tools/groups";
 import { createToolContext, type ToolContext } from "./context";
 import { toolRegistry } from "./registry";
 
 /** The version is package.json's (bundled at build time: wrangler's esbuild inlines just that field). */
 export const SERVER_INFO = { name: "gtm-mcp", version } as const;
 
-export function buildServer(ctx: ToolContext): McpServer {
+/** `groups` defaults to GTM_TOOL_GROUPS; throws ToolGroupsError if that is invalid. */
+export function buildServer(
+	ctx: ToolContext,
+	groups: ToolGroupSelection = parseToolGroups(ctx.env.GTM_TOOL_GROUPS),
+): McpServer {
 	const server = new McpServer(SERVER_INFO);
 	const tools = toolRegistry(server, ctx);
-	for (const group of TOOL_GROUPS) group(tools);
+	for (const register of toolModulesFor(groups)) register(tools);
 	registerBestPractices(server);
 	return server;
 }
 
 /** Serve one /mcp request for an already-authenticated user. Tests call this directly. */
-export function handleMcp(request: Request, env: Env, ctx: ExecutionContext, props: Props): Promise<Response> {
-	return createMcpHandler(() => buildServer(createToolContext(props, env)), { route: "/mcp" })(request, env, ctx);
+export async function handleMcp(request: Request, env: Env, ctx: ExecutionContext, props: Props): Promise<Response> {
+	let groups: ToolGroupSelection;
+	try {
+		groups = parseToolGroups(env.GTM_TOOL_GROUPS);
+	} catch (error) {
+		if (!(error instanceof ToolGroupsError)) throw error;
+		// A deploy-time mistake: fail every /mcp request loudly rather than serve a surprise
+		// tool set. /setup shows the same message, which echoes only name-shaped input.
+		console.error("mcp: invalid GTM_TOOL_GROUPS");
+		return Response.json(
+			{ jsonrpc: "2.0", id: null, error: { code: -32603, message: error.message } },
+			{ status: 500 },
+		);
+	}
+	const handler = createMcpHandler(() => buildServer(createToolContext(props, env), groups), { route: "/mcp" });
+	return handler(request, env, ctx);
 }
 
 /** Protected by OAuthProvider: only reached with a valid MCP access token. ctx.props is decrypted Props. */

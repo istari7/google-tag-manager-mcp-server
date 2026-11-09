@@ -44,7 +44,7 @@ export const variableTools: ToolGroup = (tools) => {
 		name: "list_variables",
 		key: "variables",
 		description:
-			"List the user-defined variables in a GTM workspace: ID, name, type and folder. Built-ins: list_built_in_variables.",
+			"List a workspace's user-defined variables: ID, name, type, folder. Built-ins: list_built_in_variables.",
 	});
 
 	addGetTool(tools, variable, {
@@ -71,7 +71,7 @@ export const variableTools: ToolGroup = (tools) => {
 		"update_variable",
 		{
 			description:
-				"Change some fields of a variable; omitted fields are kept. Pass the fingerprint from get_variable to avoid overwriting newer edits.",
+				"Change some fields of a variable; omitted fields are kept. Pass get_variable's fingerprint to avoid overwriting newer edits.",
 			input: workspaceInput
 				.extend(variableIdInput)
 				.extend(variableFields.partial().shape)
@@ -88,6 +88,6 @@ export const variableTools: ToolGroup = (tools) => {
 
 	addDeleteTool(tools, variable, {
 		name: "delete_variable",
-		description: "Delete a variable from a workspace. Without confirm: true, only shows what would be deleted.",
+		description: "Delete a variable. Without confirm: true, only previews.",
 	});
 };

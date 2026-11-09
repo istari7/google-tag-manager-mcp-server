@@ -107,7 +107,7 @@ export const triggerTools: ToolGroup = (tools) => {
 	addListTool(tools, trigger, {
 		name: "list_triggers",
 		key: "triggers",
-		description: "List the triggers in a GTM workspace: ID, name, type and folder.",
+		description: "List a workspace's triggers: ID, name, type, folder.",
 	});
 
 	addGetTool(tools, trigger, {
@@ -134,7 +134,7 @@ export const triggerTools: ToolGroup = (tools) => {
 		"update_trigger",
 		{
 			description:
-				"Change some fields of a trigger; omitted fields are kept, [] clears a list. Pass the fingerprint from get_trigger to avoid overwriting newer edits.",
+				"Change some fields of a trigger; omitted fields are kept, [] clears a list. Pass get_trigger's fingerprint to avoid overwriting newer edits.",
 			input: workspaceInput
 				.extend(triggerIdInput)
 				.extend(triggerFields.partial().shape)
@@ -151,8 +151,7 @@ export const triggerTools: ToolGroup = (tools) => {
 
 	addDeleteTool(tools, trigger, {
 		name: "delete_trigger",
-		description:
-			"Delete a trigger from a workspace. Without confirm: true, only shows what would be deleted and which tags use it.",
+		description: "Delete a trigger. Without confirm: true, only previews it and the tags that use it.",
 		// Tags that fire on or are blocked by this trigger lose it when it is deleted.
 		related: async (ids, { gtm }) => {
 			const parent = workspacePath(ids);

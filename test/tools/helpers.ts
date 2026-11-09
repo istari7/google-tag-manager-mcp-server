@@ -27,14 +27,22 @@ export const FAKE_GOOGLE_TOKEN = fakeProps().googleAccessToken;
 
 let nextId = 1;
 
-/** One JSON-RPC call to /mcp as an already signed-in user. */
-export async function rpc(method: string, params: unknown = {}, props: Props = fakeProps()) {
+/** Raw /mcp response for one JSON-RPC call, with GTM_TOOL_GROUPS set to `toolGroups`. */
+export function rawRpc(method: string, params: unknown, props: Props, toolGroups: string): Promise<Response> {
 	const request = new Request(`${ORIGIN}/mcp`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" },
 		body: JSON.stringify({ jsonrpc: "2.0", id: nextId++, method, params }),
 	});
-	const res = await handleMcp(request, env, createExecutionContext(), props);
+	return handleMcp(request, { ...env, GTM_TOOL_GROUPS: toolGroups }, createExecutionContext(), props);
+}
+
+/**
+ * One JSON-RPC call to /mcp as an already signed-in user. Every tool group is on, so tool
+ * tests don't depend on which groups are default (test/tool-groups.test.ts covers that).
+ */
+export async function rpc(method: string, params: unknown = {}, props: Props = fakeProps(), toolGroups = "all") {
+	const res = await rawRpc(method, params, props, toolGroups);
 	expect(res.status).toBe(200);
 	return mcpResult(res);
 }

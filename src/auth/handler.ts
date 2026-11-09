@@ -9,6 +9,7 @@ import {
 	CimdFetchError,
 } from "@cloudflare/workers-oauth-provider";
 import type { Env, Props } from "../env";
+import { describeToolGroups, isDefaultSelection, parseToolGroups, ToolGroupsError } from "../tools/groups";
 import { allowlistConfigured, isAllowed } from "./allowlist";
 import { exchangeCode, GoogleInvalidGrant, googleAuthorizeUrl, googleScopes, pkcePair, readIdToken } from "./google";
 import { consentPage, messagePage, type SetupStatus, setupPage } from "./pages";
@@ -29,7 +30,18 @@ export function setupStatus(env: Env): SetupStatus {
 		allowedDomains: allowlistConfigured({ ALLOWED_DOMAINS: env.ALLOWED_DOMAINS }),
 		rateLimits: !!env.AUTH_RATE_LIMITER && !!env.TOKEN_RATE_LIMITER && !!env.MCP_RATE_LIMITER,
 		scopes: googleScopes(env.GOOGLE_SCOPES),
+		toolGroups: toolGroupsStatus(env.GTM_TOOL_GROUPS),
 	};
+}
+
+function toolGroupsStatus(value: string | undefined): SetupStatus["toolGroups"] {
+	try {
+		const groups = parseToolGroups(value);
+		return { groups: describeToolGroups(groups), isDefault: isDefaultSelection(groups) };
+	} catch (error) {
+		if (error instanceof ToolGroupsError) return { error: error.message };
+		throw error;
+	}
 }
 
 export const authHandler = {

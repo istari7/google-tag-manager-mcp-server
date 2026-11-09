@@ -1,0 +1,79 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`tools per configuration > puts every tool in exactly one group (or core), and all lists them all 1`] = `
+{
+  "accounts": [
+    "list_accounts",
+    "get_account",
+    "update_account",
+    "list_containers",
+    "lookup_container",
+    "get_container_snippet",
+    "delete_container",
+  ],
+  "builtins": [
+    "list_built_in_variables",
+    "enable_built_in_variables",
+    "disable_built_in_variables",
+  ],
+  "container-admin": [],
+  "destinations": [],
+  "environments": [],
+  "folder-admin": [
+    "create_folder",
+    "move_entities_to_folder",
+    "delete_folder",
+  ],
+  "folders": [
+    "list_folders",
+  ],
+  "gtag": [
+    "list_gtag_configs",
+    "delete_gtag_config",
+  ],
+  "guidance": [],
+  "reverts": [],
+  "server": [],
+  "tags": [
+    "list_tags",
+    "get_tag",
+    "create_tag",
+    "update_tag",
+    "delete_tag",
+  ],
+  "templates": [],
+  "triggers": [
+    "list_triggers",
+    "get_trigger",
+    "create_trigger",
+    "update_trigger",
+    "delete_trigger",
+  ],
+  "users": [
+    "list_user_permissions",
+    "set_user_permission",
+    "delete_user_permission",
+  ],
+  "variables": [
+    "list_variables",
+    "get_variable",
+    "create_variable",
+    "update_variable",
+    "delete_variable",
+  ],
+  "version-admin": [],
+  "workspace-admin": [],
+  "workspaces": [
+    "list_workspaces",
+    "get_workspace_status",
+    "create_workspace",
+    "quick_preview_workspace",
+    "delete_workspace",
+    "create_version",
+    "publish_version",
+    "get_live_version",
+    "list_versions",
+  ],
+  "zones": [],
+}
+`;

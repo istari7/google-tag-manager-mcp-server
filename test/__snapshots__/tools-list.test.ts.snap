@@ -25,7 +25,7 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "readOnlyHint": true,
     },
     "args": [],
-    "description": "List the Google Tag Manager accounts the connected user can access.",
+    "description": "List the GTM accounts the connected user can access.",
     "name": "list_accounts",
     "required": [],
   },
@@ -67,7 +67,7 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
     "args": [
       "accountId",
     ],
-    "description": "List the containers in a GTM account, with their public IDs (GTM-XXXX) and usage context.",
+    "description": "List an account's containers with their public IDs (GTM-XXXX) and usage context.",
     "name": "list_containers",
     "required": [
       "accountId",
@@ -179,7 +179,7 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "accountId",
       "containerId",
     ],
-    "description": "List the workspaces in a GTM container. Edits happen in a workspace, not on the live container.",
+    "description": "List a container's workspaces. Edits happen in a workspace, not on the live container.",
     "name": "list_workspaces",
     "required": [
       "accountId",
@@ -195,7 +195,7 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "containerId",
       "workspaceId",
     ],
-    "description": "List a workspace's pending changes and merge conflicts. Changes are not live until a version is created (create_version) and published (publish_version).",
+    "description": "List a workspace's pending changes and merge conflicts. Nothing is live until create_version, then publish_version.",
     "name": "get_workspace_status",
     "required": [
       "accountId",
@@ -252,7 +252,7 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "workspaceId",
       "confirm",
     ],
-    "description": "Delete a workspace and discard its unversioned changes. Without confirm: true, only shows what would be lost. Saved versions are kept.",
+    "description": "Delete a workspace and discard its unversioned changes. Without confirm: true, only previews what would be lost. Saved versions are kept.",
     "name": "delete_workspace",
     "required": [
       "accountId",
@@ -269,7 +269,7 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "containerId",
       "workspaceId",
     ],
-    "description": "List the tags in a GTM workspace: ID, name, type, folder, firing and blocking trigger IDs, paused: true if paused (absent = active).",
+    "description": "List a workspace's tags: ID, name, type, folder, firing/blocking trigger IDs, paused: true if paused (absent = active).",
     "name": "list_tags",
     "required": [
       "accountId",
@@ -355,7 +355,7 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "consentTypes",
       "fingerprint",
     ],
-    "description": "Change some fields of a tag; omitted fields are kept, [] clears a list. Pass the fingerprint from get_tag to avoid overwriting newer edits.",
+    "description": "Change some fields of a tag; omitted fields are kept, [] clears a list. Pass get_tag's fingerprint to avoid overwriting newer edits.",
     "name": "update_tag",
     "required": [
       "accountId",
@@ -377,7 +377,7 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "tagId",
       "confirm",
     ],
-    "description": "Delete a tag from a workspace. Without confirm: true, only shows what would be deleted.",
+    "description": "Delete a tag. Without confirm: true, only previews.",
     "name": "delete_tag",
     "required": [
       "accountId",
@@ -395,7 +395,7 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "containerId",
       "workspaceId",
     ],
-    "description": "List the triggers in a GTM workspace: ID, name, type and folder.",
+    "description": "List a workspace's triggers: ID, name, type, folder.",
     "name": "list_triggers",
     "required": [
       "accountId",
@@ -483,7 +483,7 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "notes",
       "fingerprint",
     ],
-    "description": "Change some fields of a trigger; omitted fields are kept, [] clears a list. Pass the fingerprint from get_trigger to avoid overwriting newer edits.",
+    "description": "Change some fields of a trigger; omitted fields are kept, [] clears a list. Pass get_trigger's fingerprint to avoid overwriting newer edits.",
     "name": "update_trigger",
     "required": [
       "accountId",
@@ -505,7 +505,7 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "triggerId",
       "confirm",
     ],
-    "description": "Delete a trigger from a workspace. Without confirm: true, only shows what would be deleted and which tags use it.",
+    "description": "Delete a trigger. Without confirm: true, only previews it and the tags that use it.",
     "name": "delete_trigger",
     "required": [
       "accountId",
@@ -523,7 +523,7 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "containerId",
       "workspaceId",
     ],
-    "description": "List the user-defined variables in a GTM workspace: ID, name, type and folder. Built-ins: list_built_in_variables.",
+    "description": "List a workspace's user-defined variables: ID, name, type, folder. Built-ins: list_built_in_variables.",
     "name": "list_variables",
     "required": [
       "accountId",
@@ -593,7 +593,7 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "notes",
       "fingerprint",
     ],
-    "description": "Change some fields of a variable; omitted fields are kept. Pass the fingerprint from get_variable to avoid overwriting newer edits.",
+    "description": "Change some fields of a variable; omitted fields are kept. Pass get_variable's fingerprint to avoid overwriting newer edits.",
     "name": "update_variable",
     "required": [
       "accountId",
@@ -615,7 +615,7 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "variableId",
       "confirm",
     ],
-    "description": "Delete a variable from a workspace. Without confirm: true, only shows what would be deleted.",
+    "description": "Delete a variable. Without confirm: true, only previews.",
     "name": "delete_variable",
     "required": [
       "accountId",
@@ -633,7 +633,7 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "containerId",
       "workspaceId",
     ],
-    "description": "List the built-in variables enabled in a GTM workspace (e.g. Page URL, Click Classes), by type and name.",
+    "description": "List a workspace's enabled built-in variables (e.g. Page URL, Click Classes) by type and name.",
     "name": "list_built_in_variables",
     "required": [
       "accountId",
@@ -821,7 +821,7 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "name",
       "notes",
     ],
-    "description": "Save a workspace's changes as a new container version. Does not publish (see publish_version). Fails if the workspace has no changes or has merge conflicts.",
+    "description": "Save a workspace's changes as a new container version; does not publish. Fails if there are no changes or merge conflicts.",
     "name": "create_version",
     "required": [
       "accountId",
@@ -858,7 +858,7 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "accountId",
       "containerId",
     ],
-    "description": "Summarise the published (live) version of a container: version ID, entity counts, and the name and type of every tag, trigger and variable.",
+    "description": "Summarise a container's live version: version ID, counts, and every tag, trigger and variable's name and type.",
     "name": "get_live_version",
     "required": [
       "accountId",
