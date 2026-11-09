@@ -52,6 +52,12 @@ export interface VersionIds extends ContainerIds {
 export interface GtagConfigIds extends WorkspaceIds {
 	gtagConfigId: string;
 }
+export interface ClientIds extends WorkspaceIds {
+	clientId: string;
+}
+export interface TransformationIds extends WorkspaceIds {
+	transformationId: string;
+}
 
 export function accountPath(ids: AccountIds): string {
 	return `accounts/${assertGtmId("accountId", ids.accountId)}`;
@@ -89,6 +95,16 @@ export function builtInVariablesPath(ids: WorkspaceIds): string {
 
 export function gtagConfigPath(ids: GtagConfigIds): string {
 	return `${workspacePath(ids)}/gtag_config/${assertGtmId("gtagConfigId", ids.gtagConfigId)}`;
+}
+
+/** Server containers only. */
+export function clientPath(ids: ClientIds): string {
+	return `${workspacePath(ids)}/clients/${assertGtmId("clientId", ids.clientId)}`;
+}
+
+/** Server containers only. */
+export function transformationPath(ids: TransformationIds): string {
+	return `${workspacePath(ids)}/transformations/${assertGtmId("transformationId", ids.transformationId)}`;
 }
 
 export function versionPath(ids: VersionIds): string {

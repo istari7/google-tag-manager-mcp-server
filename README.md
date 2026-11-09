@@ -103,6 +103,12 @@ settings or access, which are not versioned.
 | | `delete_folder` | Deletes a folder; the preview lists what is in it, which is kept | destructive |
 | Google tag configs | `list_gtag_configs` | Lists the Google tag configs GTM creates with GA4, Ads and Floodlight tags | read |
 | | `delete_gtag_config` | Deletes a Google tag config, e.g. one left behind after its tag was deleted | destructive |
+| Server-side (server containers only) | `list_clients`, `get_client` | Lists clients / gets one client in full | read |
+| | `create_client`, `update_client` | Creates a client / changes some fields of a client (other fields are kept) | write |
+| | `delete_client` | Deletes a client; the preview shows the client | destructive |
+| | `list_transformations`, `get_transformation` | Lists transformations / gets one transformation in full | read |
+| | `create_transformation`, `update_transformation` | Creates a transformation / changes some fields of a transformation (other fields are kept) | write |
+| | `delete_transformation` | Deletes a transformation; the preview shows the transformation | destructive |
 | Versions | `create_version` | Saves the workspace as a new container version. Does not publish. Refuses when there are no changes or there are merge conflicts | write |
 | | `publish_version` | Makes a version live; the preview shows the version and what is live now | destructive |
 | | `get_live_version` | Gets the currently published version | read |
@@ -267,7 +273,7 @@ The Worker asks Google for `openid email profile` (to identify you) plus the sco
 | Scope (`https://www.googleapis.com/auth/…`) | Needed for |
 |---|---|
 | `tagmanager.readonly` | Every read tool |
-| `tagmanager.edit.containers` | Creating workspaces; creating, updating and deleting tags, triggers, variables, folders, built-in variables and Google tag configs |
+| `tagmanager.edit.containers` | Creating workspaces; creating, updating and deleting tags, triggers, variables, folders, built-in variables, Google tag configs, clients and transformations |
 | `tagmanager.edit.containerversions` | `create_version` |
 | `tagmanager.publish` | `publish_version` |
 | `tagmanager.delete.containers` | `delete_workspace`, `delete_container` |
