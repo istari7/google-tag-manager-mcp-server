@@ -31,6 +31,7 @@ async function folderContents(gtm: GtmClient, path: string) {
 	};
 }
 
+/** Reading folders: the default `folders` group. */
 export const folderTools: ToolGroup = (tools) => {
 	tools.add(
 		"list_folders",
@@ -49,7 +50,10 @@ export const folderTools: ToolGroup = (tools) => {
 			return okList("folders", list, (f) => ({ folderId: f.folderId, name: f.name, notes: f.notes || undefined }));
 		},
 	);
+};
 
+/** Creating, filling and deleting folders: the optional `folder-admin` group (src/tools/groups.ts). */
+export const folderAdminTools: ToolGroup = (tools) => {
 	tools.add(
 		"create_folder",
 		{

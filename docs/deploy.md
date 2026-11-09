@@ -139,6 +139,7 @@ Plain settings (not secret) live under `vars` in `wrangler.jsonc`:
 |---|---|---|
 | `GOOGLE_SCOPES` | Tag Manager scopes | Space-separated Google scopes requested at sign-in. `openid email profile` are always added. Must match your consent screen; see [google-setup.md](google-setup.md#add-the-scopes) |
 | `ACCESS_TOKEN_TTL_SECONDS` | `3000` | Upper limit for the lifetime of the token the Worker gives MCP clients. It's always shorter than Google's token, so the Worker can refresh Google's in time |
+| `GTM_TOOL_GROUPS` | empty (default groups) | Comma-separated tool groups MCP clients see, e.g. `default,users` or `all`. See the README's [Tool groups](../README.md#tool-groups) |
 
 Change them in `wrangler.jsonc` and redeploy.
 

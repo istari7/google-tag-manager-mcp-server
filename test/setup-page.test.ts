@@ -50,6 +50,7 @@ const STATUS: SetupStatus = {
 	allowedDomains: false,
 	rateLimits: true,
 	scopes: ["openid", READONLY],
+	toolGroups: { groups: ["tags"], isDefault: false },
 };
 
 describe("/setup routing and headers", () => {

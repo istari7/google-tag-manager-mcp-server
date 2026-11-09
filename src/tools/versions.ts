@@ -49,7 +49,7 @@ export const versionTools: ToolGroup = (tools) => {
 		"create_version",
 		{
 			description:
-				"Save a workspace's changes as a new container version. Does not publish (see publish_version). Fails if the workspace has no changes or has merge conflicts.",
+				"Save a workspace's changes as a new container version; does not publish. Fails if there are no changes or merge conflicts.",
 			input: workspaceInput.extend({
 				name: nameInput("Version").describe("Version name: what changed, e.g. Add GA4 purchase event"),
 				notes: z.string().optional().describe("Version notes: what changed and why"),
@@ -149,7 +149,7 @@ export const versionTools: ToolGroup = (tools) => {
 		"get_live_version",
 		{
 			description:
-				"Summarise the published (live) version of a container: version ID, entity counts, and the name and type of every tag, trigger and variable.",
+				"Summarise a container's live version: version ID, counts, and every tag, trigger and variable's name and type.",
 			input: containerInput,
 			annotations: { readOnlyHint: true },
 		},

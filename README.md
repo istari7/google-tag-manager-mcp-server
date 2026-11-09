@@ -28,6 +28,7 @@ the GTM client is generated from Google's Discovery document.
 
 - [How it works](#how-it-works)
 - [Tools](#tools)
+  - [Tool groups](#tool-groups)
 - [Publishing and deleting](#publishing-and-deleting)
 - [Safety model](#safety-model)
 - [Deploy](#deploy)
@@ -66,49 +67,82 @@ the moment they are confirmed: `publish_version` and `delete_container` change w
 load, and `update_account`, `set_user_permission` and `delete_user_permission` change account
 settings or access, which are not versioned.
 
+The **Group** column is the tool group that [`GTM_TOOL_GROUPS`](#tool-groups) switches on.
+Groups marked *optional* are off unless you enable them.
+
 | Group | Tool | What it does | Kind |
 |---|---|---|---|
-| Utility | `ping` | Checks the server is reachable | read |
+| `core` (always on) | `ping` | Checks the server is reachable | read |
 | | `auth_status` | Shows the signed-in email, granted scopes and token expiry (never the tokens) | read |
-| Accounts & containers | `list_accounts` | Lists the GTM accounts you can access | read |
+| `accounts` | `list_accounts` | Lists the GTM accounts you can access | read |
 | | `get_account` | Gets an account's settings (name, data sharing, features) | read |
 | | `update_account` | Renames an account or changes its data sharing | admin |
 | | `list_containers` | Lists the containers in an account | read |
 | | `lookup_container` | Finds a container by its public ID (`GTM-XXXXXXX`) | read |
 | | `get_container_snippet` | Returns the container's install snippet | read |
 | | `delete_container` | Deletes a container for good; needs `confirm: true` and its public ID typed back | destructive |
-| Users | `list_user_permissions` | Lists who can access an account and its containers | read |
-| | `set_user_permission` | Adds a user or changes their account / container access; the preview shows before and after | destructive |
-| | `delete_user_permission` | Removes a user from an account | destructive |
-| Workspaces | `list_workspaces` | Lists a container's workspaces | read |
+| `workspaces` | `list_workspaces` | Lists a container's workspaces | read |
 | | `create_workspace` | Creates a workspace (containers allow only a few) | write |
 | | `delete_workspace` | Deletes a workspace and its unversioned changes; the preview counts them | destructive |
 | | `get_workspace_status` | Shows pending changes and merge conflicts | read |
 | | `quick_preview_workspace` | Checks a workspace compiles by building a throwaway preview; saves and publishes nothing | read |
-| Tags | `list_tags`, `get_tag` | Lists tags / gets one tag in full | read |
-| | `create_tag`, `update_tag` | Creates a tag / changes some fields of a tag (other fields are kept) | write |
-| | `delete_tag` | Deletes a tag; the preview shows the tag | destructive |
-| Triggers | `list_triggers`, `get_trigger` | Lists triggers / gets one trigger in full | read |
-| | `create_trigger`, `update_trigger` | Creates a trigger / changes some fields of a trigger, fixing known API pitfalls in its conditions | write |
-| | `delete_trigger` | Deletes a trigger; the preview also lists the tags that use it | destructive |
-| Variables | `list_variables`, `get_variable` | Lists variables / gets one variable in full | read |
-| | `create_variable`, `update_variable` | Creates a variable / changes some fields of a variable | write |
-| | `delete_variable` | Deletes a variable; the preview shows the variable | destructive |
-| Built-in variables | `list_built_in_variables` | Lists the enabled built-in variables | read |
-| | `enable_built_in_variables` | Enables built-in variables (Page URL, Click ID, …) | write |
-| | `disable_built_in_variables` | Disables built-in variables; the preview skips ones that are not enabled | destructive |
-| Folders | `list_folders` | Lists folders | read |
-| | `create_folder` | Creates a folder | write |
-| | `move_entities_to_folder` | Moves tags, triggers and variables into a folder (folder `0` = out of any folder) | write |
-| | `delete_folder` | Deletes a folder; the preview lists what is in it, which is kept | destructive |
-| Google tag configs | `list_gtag_configs` | Lists the Google tag configs GTM creates with GA4, Ads and Floodlight tags | read |
-| | `delete_gtag_config` | Deletes a Google tag config, e.g. one left behind after its tag was deleted | destructive |
-| Versions | `create_version` | Saves the workspace as a new container version. Does not publish. Refuses when there are no changes or there are merge conflicts | write |
+| | `create_version` | Saves the workspace as a new container version. Does not publish. Refuses when there are no changes or there are merge conflicts | write |
 | | `publish_version` | Makes a version live; the preview shows the version and what is live now | destructive |
 | | `get_live_version` | Gets the currently published version | read |
 | | `list_versions` | Lists container versions | read |
+| `tags` | `list_tags`, `get_tag` | Lists tags / gets one tag in full | read |
+| | `create_tag`, `update_tag` | Creates a tag / changes some fields of a tag (other fields are kept) | write |
+| | `delete_tag` | Deletes a tag; the preview shows the tag | destructive |
+| `triggers` | `list_triggers`, `get_trigger` | Lists triggers / gets one trigger in full | read |
+| | `create_trigger`, `update_trigger` | Creates a trigger / changes some fields of a trigger, fixing known API pitfalls in its conditions | write |
+| | `delete_trigger` | Deletes a trigger; the preview also lists the tags that use it | destructive |
+| `variables` | `list_variables`, `get_variable` | Lists variables / gets one variable in full | read |
+| | `create_variable`, `update_variable` | Creates a variable / changes some fields of a variable | write |
+| | `delete_variable` | Deletes a variable; the preview shows the variable | destructive |
+| `builtins` | `list_built_in_variables` | Lists the enabled built-in variables | read |
+| | `enable_built_in_variables` | Enables built-in variables (Page URL, Click ID, …) | write |
+| | `disable_built_in_variables` | Disables built-in variables; the preview skips ones that are not enabled | destructive |
+| `folders` | `list_folders` | Lists folders | read |
+| `folder-admin` (optional) | `create_folder` | Creates a folder | write |
+| | `move_entities_to_folder` | Moves tags, triggers and variables into a folder (folder `0` = out of any folder) | write |
+| | `delete_folder` | Deletes a folder; the preview lists what is in it, which is kept | destructive |
+| `gtag` (optional) | `list_gtag_configs` | Lists the Google tag configs GTM creates with GA4, Ads and Floodlight tags | read |
+| | `delete_gtag_config` | Deletes a Google tag config, e.g. one left behind after its tag was deleted | destructive |
+| `users` (optional) | `list_user_permissions` | Lists who can access an account and its containers | read |
+| | `set_user_permission` | Adds a user or changes their account / container access; the preview shows before and after | destructive |
+| | `delete_user_permission` | Removes a user from an account | destructive |
 
 The server also offers best-practices guides as MCP resources (`gtm://best-practices`).
+
+### Tool groups
+
+Every tool's name, description and input schema is sent to the AI in each conversation, so a
+long tool list costs context. `GTM_TOOL_GROUPS` (a var in `wrangler.jsonc`, or in the Cloudflare
+dashboard under the Worker's Settings › Variables) picks which groups MCP clients see. The group
+names are the same as the Go `gtm-mcp-server`'s `GTM_TOOL_GROUPS`, so a value that works there
+works here.
+
+| Value | Tools listed |
+|---|---|
+| empty (the default) | The default groups below, kept under 40 KB of tool definitions |
+| `default,users,gtag` | The default groups plus `users` and `gtag` |
+| `tags,triggers,variables` | Only those groups (plus `core`) |
+| `all` | Every group. Bigger, so every conversation starts with more context used |
+
+The value is comma-separated and case-insensitive. `core` (`ping`, `auth_status`) is always on.
+An unknown name makes every `/mcp` request fail with an error that names it, and `/setup` shows
+the same error, so a typo can't silently change what clients see.
+
+- **Default:** `accounts`, `workspaces` (including versions and publishing), `tags`, `triggers`,
+  `variables`, `folders` (reading), `builtins`, `guidance`.
+- **Optional:** `folder-admin` (create, fill and delete folders), `gtag` (Google tag configs),
+  `users` (user permissions), `templates`, `zones`, `server`, `environments`, `destinations`,
+  `container-admin`, `workspace-admin`, `version-admin`, `reverts`.
+
+`guidance`, `templates`, `zones`, `server`, `environments`, `destinations`, `container-admin`,
+`workspace-admin`, `version-admin` and `reverts` are accepted but have no tools yet. Unlike
+the Go server, `templates`, `zones` (GTM 360) and `server` (server-side containers) are optional
+here, to keep the default list small. `pnpm tools-report` prints the size of each group.
 
 ## Publishing and deleting
 
@@ -331,6 +365,7 @@ Requires Node.js 24 and pnpm (version pinned in `package.json`).
 | `pnpm lint` / `pnpm format` | Biome check / check with fixes |
 | `pnpm gen` | Regenerate `src/gtm/generated.ts` from Google's Discovery document |
 | `pnpm cf-typegen` | Regenerate `worker-configuration.d.ts` after changing `wrangler.jsonc` |
+| `pnpm tools-report` | Size of the `tools/list` response per tool group, for the default groups and for `all` |
 | `pnpm run deploy` | Deploy to your Cloudflare account |
 
 `pnpm dev` runs `wrangler dev --infer-origin-from-routes=false`. To finish a Google sign-in locally,

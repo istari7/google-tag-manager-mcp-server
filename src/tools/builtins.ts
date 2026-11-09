@@ -165,8 +165,7 @@ export const builtInTools: ToolGroup = (tools) => {
 	tools.add(
 		"list_built_in_variables",
 		{
-			description:
-				"List the built-in variables enabled in a GTM workspace (e.g. Page URL, Click Classes), by type and name.",
+			description: "List a workspace's enabled built-in variables (e.g. Page URL, Click Classes) by type and name.",
 			input: workspaceInput,
 			annotations: { readOnlyHint: true },
 		},

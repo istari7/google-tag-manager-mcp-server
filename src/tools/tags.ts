@@ -66,7 +66,7 @@ export const tagTools: ToolGroup = (tools) => {
 		name: "list_tags",
 		key: "tags",
 		description:
-			"List the tags in a GTM workspace: ID, name, type, folder, firing and blocking trigger IDs, paused: true if paused (absent = active).",
+			"List a workspace's tags: ID, name, type, folder, firing/blocking trigger IDs, paused: true if paused (absent = active).",
 	});
 
 	addGetTool(tools, tag, {
@@ -92,7 +92,7 @@ export const tagTools: ToolGroup = (tools) => {
 		"update_tag",
 		{
 			description:
-				"Change some fields of a tag; omitted fields are kept, [] clears a list. Pass the fingerprint from get_tag to avoid overwriting newer edits.",
+				"Change some fields of a tag; omitted fields are kept, [] clears a list. Pass get_tag's fingerprint to avoid overwriting newer edits.",
 			input: workspaceInput
 				.extend(tagIdInput)
 				.extend(tagFields.partial().shape)
@@ -109,6 +109,6 @@ export const tagTools: ToolGroup = (tools) => {
 
 	addDeleteTool(tools, tag, {
 		name: "delete_tag",
-		description: "Delete a tag from a workspace. Without confirm: true, only shows what would be deleted.",
+		description: "Delete a tag. Without confirm: true, only previews.",
 	});
 };

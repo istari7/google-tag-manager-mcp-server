@@ -25,7 +25,7 @@ export const workspaceTools: ToolGroup = (tools) => {
 	tools.add(
 		"list_workspaces",
 		{
-			description: "List the workspaces in a GTM container. Edits happen in a workspace, not on the live container.",
+			description: "List a container's workspaces. Edits happen in a workspace, not on the live container.",
 			input: containerInput,
 			annotations: { readOnlyHint: true },
 		},
@@ -47,7 +47,7 @@ export const workspaceTools: ToolGroup = (tools) => {
 		"get_workspace_status",
 		{
 			description:
-				"List a workspace's pending changes and merge conflicts. Changes are not live until a version is created (create_version) and published (publish_version).",
+				"List a workspace's pending changes and merge conflicts. Nothing is live until create_version, then publish_version.",
 			input: workspaceInput,
 			annotations: { readOnlyHint: true },
 		},
@@ -98,7 +98,7 @@ export const workspaceTools: ToolGroup = (tools) => {
 		"delete_workspace",
 		{
 			description:
-				"Delete a workspace and discard its unversioned changes. Without confirm: true, only shows what would be lost. Saved versions are kept.",
+				"Delete a workspace and discard its unversioned changes. Without confirm: true, only previews what would be lost. Saved versions are kept.",
 			input: workspaceInput.extend({ confirm: confirmInput("delete") }),
 			annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 		},
