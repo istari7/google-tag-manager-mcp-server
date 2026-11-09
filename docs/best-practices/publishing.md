@@ -1,10 +1,10 @@
 # Publishing workflow and safety
 
-A change moves through four stages: **workspace → review → version → a person
-publishes in the GTM UI**. This server covers the first three. It has no way
-to publish a version and no way to delete a container or an account; the API
-client refuses those requests outright. Your job ends at a saved, clearly
-described version.
+A change moves through five stages: **workspace → review → version → review
+→ publish**. Publishing changes the live website for every visitor, so it
+happens only when the user explicitly says so for that version. Without that,
+your job ends at a saved, clearly described version that the user publishes
+in the GTM UI.
 
 ## Stage 1: pick a workspace
 
@@ -46,23 +46,33 @@ described version.
   `update` or `v3` are not acceptable.
 - Saving a version does not change the website.
 
-## Handing over
+## Stage 5: publish, only on the user's word
 
-Tell the user the version ID, what is in it, and that it is **not live**. They
-should test it in GTM Preview / Tag Assistant, then publish it themselves from
-the Versions page in the GTM UI. Publishing affects every visitor to the site.
+Tell the user the version ID, what is in it, and that it is **not live**.
+Suggest they test it in GTM Preview / Tag Assistant first. Then:
+
+- If the user explicitly asks you to publish this version, call
+  `publish_version` without `confirm` first. Show them the preview: what the
+  version contains and what is live now. Call it again with `confirm: true`
+  only after they agree.
+- Otherwise they publish it themselves from the Versions page in the GTM UI.
+- A request to "make a change" or "set up tracking" is not a request to
+  publish. Ask.
 
 ## Undoing a bad release
 
-The clean fix is for a person to republish the last good version in the GTM
-UI. Help them find it: `get_live_version` shows what is live now and
-`list_versions` lists versions newest first. Rebuilding the old state by hand
-in a new workspace is slower and error-prone.
+The clean fix is to republish the last good version. `get_live_version` shows
+what is live now and `list_versions` lists versions newest first. With the
+user's go-ahead, publish the good version with `publish_version`; otherwise
+they republish it in the GTM UI. Rebuilding the old state by hand in a new
+workspace is slower and error-prone.
 
 ## Hard rules
 
-- Never say, or imply, that you published something or that you can.
+- Never publish without the user's explicit go-ahead for that version.
 - Never save a version the user has not reviewed.
-- Never describe a workspace change as live.
+- Never describe a workspace change, or an unpublished version, as live.
 - Never delete things as a by-product of another task; raise deletions as
-  their own proposal.
+  their own proposal. `delete_workspace` discards unversioned work, and
+  `delete_container` removes the container and its versions for good: it
+  needs the container's public ID typed back.

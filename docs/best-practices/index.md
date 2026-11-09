@@ -7,8 +7,8 @@ before you create or change anything; they are short on purpose.
 ## Topics
 
 - **publishing** (`gtm://best-practices/publishing`): the life of a change,
-  from a draft in a workspace to a saved version that a person publishes in
-  the GTM UI. Includes how to undo a bad release.
+  from a draft in a workspace to a reviewed version that goes live only when
+  the user says so. Includes how to undo a bad release.
 - **naming** (`gtm://best-practices/naming`): how to name tags, triggers and
   variables, when to use folders, and what counts as clutter.
 - **tags** (`gtm://best-practices/tags`): Google tag and GA4 event tags,
@@ -31,11 +31,14 @@ before you create or change anything; they are short on purpose.
    (`list_tags`, `list_triggers`, `list_variables`, `list_folders`,
    `list_built_in_variables`). Reusing an existing trigger or variable beats
    creating a near-copy.
-3. **Nothing goes live from here.** Workspace edits and saved versions do not
-   reach the website. A person has to publish a version in the GTM UI. Say
-   this plainly whenever you report a change.
+3. **Nothing goes live without the user's go-ahead.** Workspace edits and
+   saved versions do not reach the website; only publishing a version does.
+   Publish (`publish_version`) only when the user has explicitly asked for that
+   version to go live, otherwise they publish it in the GTM UI. Say plainly
+   whether a change is live whenever you report one.
 4. **Deleting is the user's decision.** Suggest removals with reasons; delete
-   only after the user has agreed to that specific item.
+   only after the user has agreed to that specific item. Deleting a workspace
+   or a container is never a clean-up step: propose it on its own.
 5. **Audits are lists of findings.** When asked to review a container, go
    topic by topic, rate each finding (fine / should fix / broken) and attach a
    concrete fix to every item that isn't fine.

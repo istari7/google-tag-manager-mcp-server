@@ -54,14 +54,10 @@ describe("best-practices resources", () => {
 		...Object.entries(TOPICS).map(([n, t]): [string, string] => [n, t.text]),
 	];
 
-	it.each(docs)("%s never mentions a publish tool", (_name, text) => {
-		// No tool publishes; only a person does, in the GTM UI.
-		expect(text).not.toMatch(/\bpublish_[a-z_]+|\b[a-z_]+_publish\b|`publish`|:publish\b/i);
-	});
-
-	it("the index and the publishing topic say a person publishes in the GTM UI", () => {
-		expect(index).toMatch(/person\s+has\s+to\s+publish\s+a\s+version\s+in\s+the\s+GTM\s+UI/);
-		expect(TOPICS.publishing?.text).toMatch(/a\s+person\s+publishes\s+in\s+the\s+GTM\s+UI/);
+	it("the index and the publishing topic only publish on the user's explicit go-ahead", () => {
+		expect(index).toMatch(/Publish\s+\(`publish_version`\)\s+only\s+when\s+the\s+user\s+has\s+explicitly\s+asked/);
+		expect(TOPICS.publishing?.text).toMatch(/Never\s+publish\s+without\s+the\s+user's\s+explicit\s+go-ahead/);
+		expect(TOPICS.publishing?.text).toContain("`confirm: true`");
 	});
 
 	it.each(docs)("%s carries no license header, attribution or third-party credit", (_name, text) => {

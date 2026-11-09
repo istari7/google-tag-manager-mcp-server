@@ -1,10 +1,11 @@
-// create_version (status pre-check, Q20), get_live_version, list_versions. There is no publish
-// tool by design; test/gtm-client.test.ts proves the client refuses :publish.
+// create_version (status pre-check, Q20), publish_version (confirm gating), get_live_version,
+// list_versions.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ContainerVersion, GetWorkspaceStatusResponse } from "../../src/gtm/generated";
 import { dlvVariable, errors, folder, ga4EventTag, linkClickTrigger } from "../fixtures/gtm";
 import {
+	byMethod,
 	CONTAINER,
 	CONTAINER_ARGS,
 	callTool,
@@ -165,8 +166,7 @@ describe("create_version", () => {
 			counts: { tags: 1, triggers: 1, variables: 0 },
 		});
 		expect(out.note).toContain("Version 43 is saved but NOT live");
-		expect(out.note).toContain("a human reviews and publishes the version in the GTM UI");
-		expect(out.note).not.toContain("publish_version");
+		expect(out.note).toContain("get the user's explicit go-ahead and call publish_version");
 		expect(out.note).toContain("GTM replaced workspace 7 with workspace 8");
 	});
 
@@ -211,5 +211,88 @@ describe("create_version", () => {
 		const mock = mockGtm();
 		expect((await callTool("create_version", WORKSPACE_ARGS)).isError).toBe(true);
 		expect(mock.calls).toHaveLength(0);
+	});
+});
+
+describe("publish_version", () => {
+	const VERSION = `${CONTAINER}/versions/43`;
+	const LIVE = `${CONTAINER}/versions:live`;
+	const ARGS = { ...CONTAINER_ARGS, containerVersionId: "43" };
+	const v43: ContainerVersion = {
+		containerVersionId: "43",
+		name: "Add sign_up",
+		tag: [ga4EventTag],
+		trigger: [linkClickTrigger],
+		path: VERSION,
+	};
+
+	it.each([{}, { confirm: false }])("without confirm: true (%o) only reads and previews", async (extra) => {
+		const mock = mockGtm({
+			[VERSION]: reply(v43),
+			[LIVE]: reply({ containerVersionId: "42", name: "Empty Container" }),
+		});
+		const result = await callTool("publish_version", { ...ARGS, ...extra });
+		expect(writes(mock.gtm())).toHaveLength(0);
+		expect(
+			mock
+				.gtm()
+				.map((c) => describeCall(c).path)
+				.sort(),
+		).toEqual([VERSION, LIVE].sort());
+		expect(result.json()).toEqual({
+			preview: true,
+			wouldPublish: {
+				containerVersionId: "43",
+				name: "Add sign_up",
+				counts: { tags: 1, triggers: 1, variables: 0 },
+				tags: [{ tagId: "12", name: "GA4 - Event - sign_up", type: "gaawe" }],
+				triggers: [{ triggerId: "34", name: "Link - Outbound", type: "linkClick" }],
+			},
+			currentlyLive: { containerVersionId: "42", name: "Empty Container" },
+			message:
+				"Nothing was published. Show the user what this version contains and what is live now, get their explicit go-ahead, then call publish_version again with confirm: true.",
+		});
+	});
+
+	it("previews a container that was never published, and flags a version that is already live", async () => {
+		mockGtm({ [VERSION]: reply(v43), [LIVE]: reply(errors.notFound404, 404) });
+		expect((await callTool("publish_version", ARGS)).json()).toMatchObject({
+			currentlyLive: "nothing (this container has never been published)",
+		});
+		vi.restoreAllMocks();
+		mockGtm({ [VERSION]: reply(v43), [LIVE]: reply(v43) });
+		expect((await callTool("publish_version", ARGS)).json()).toMatchObject({ alreadyLive: true });
+	});
+
+	it("refuses to preview a deleted version", async () => {
+		mockGtm({ [VERSION]: reply({ ...v43, deleted: true }), [LIVE]: reply(v43) });
+		const result = await callTool("publish_version", ARGS);
+		expect(result).toMatchObject({ isError: true, text: "Version 43 is deleted, so it cannot be published." });
+	});
+
+	it("with confirm: true sends one POST {version}:publish and says it is live", async () => {
+		const mock = mockGtm({ [`${VERSION}:publish`]: byMethod({ POST: reply({ containerVersion: v43 }) }) });
+		const result = await callTool("publish_version", { ...ARGS, confirm: true });
+		expect(mock.gtm().map(describeCall)).toMatchObject([
+			{ method: "POST", path: `${VERSION}:publish`, query: {}, body: undefined },
+		]);
+		expect(result.json()).toEqual({
+			published: { containerVersionId: "43", name: "Add sign_up", counts: { tags: 1, triggers: 1, variables: 0 } },
+			note: "Version 43 is now LIVE on every site that loads this container. To roll back, publish an earlier version (list_versions).",
+		});
+	});
+
+	it("reports a compiler error as nothing published", async () => {
+		mockGtm({ [`${VERSION}:publish`]: reply({ compilerError: true }) });
+		const result = await callTool("publish_version", { ...ARGS, confirm: true });
+		expect(result.isError).toBe(true);
+		expect(result.text).toContain("does not compile, so nothing was published");
+	});
+
+	it("passes on Google's missing-scope error", async () => {
+		mockGtm({ [`${VERSION}:publish`]: reply(errors.scope403, 403) });
+		const result = await callTool("publish_version", { ...ARGS, confirm: true });
+		expect(result.isError).toBe(true);
+		expect(result.text).toContain("did not grant the permission");
 	});
 });

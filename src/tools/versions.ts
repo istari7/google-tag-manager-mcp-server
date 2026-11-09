@@ -3,11 +3,11 @@ import { z } from "zod";
 import type { GtmClient } from "../gtm/client";
 import { GtmApiError } from "../gtm/errors";
 import { accounts, type ContainerVersion, type ContainerVersionHeader } from "../gtm/generated";
-import { containerPath, parseGtmPath, workspacePath } from "../gtm/paths";
+import { containerPath, parseGtmPath, versionPath, workspacePath } from "../gtm/paths";
 import { createVersionProblem } from "../gtm/quirks";
 import type { ToolGroup } from "../mcp/registry";
 import { fail, ok, okList } from "../mcp/result";
-import { containerInput, nameInput, workspaceInput } from "./inputs";
+import { confirmInput, containerInput, gtmId, nameInput, workspaceInput } from "./inputs";
 import { describeEntity, summarizeVersion, versionHeadline } from "./summaries";
 import { okWrite } from "./write";
 
@@ -51,7 +51,7 @@ export const versionTools: ToolGroup = (tools) => {
 		"create_version",
 		{
 			description:
-				"Save a workspace's changes as a new container version. Does not publish: a human publishes it in the GTM UI. Fails if the workspace has no changes or has merge conflicts.",
+				"Save a workspace's changes as a new container version. Does not publish (see publish_version). Fails if the workspace has no changes or has merge conflicts.",
 			input: workspaceInput.extend({
 				name: nameInput("Version").describe("Version name: what changed, e.g. Add GA4 purchase event"),
 				notes: z.string().optional().describe("Version notes: what changed and why"),
@@ -92,9 +92,50 @@ export const versionTools: ToolGroup = (tools) => {
 			return okWrite(
 				{ version },
 				{
-					note: `Version ${id} is saved but NOT live. Show the user what it contains. This server cannot publish: a human reviews and publishes the version in the GTM UI (Versions > Publish).${next}`,
+					note: `Version ${id} is saved but NOT live. Show the user what it contains. To make it live, get the user's explicit go-ahead and call publish_version, or they can publish it in the GTM UI (Versions > Publish).${next}`,
 				},
 			);
+		},
+	);
+
+	tools.add(
+		"publish_version",
+		{
+			description:
+				"Publish a container version: it goes live on every site using the container. Without confirm: true, only previews. Needs the user's explicit go-ahead.",
+			input: containerInput.extend({
+				containerVersionId: gtmId("Container version ID (from create_version or list_versions)"),
+				confirm: confirmInput("publish"),
+			}),
+			annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+		},
+		async ({ containerVersionId, confirm, ...ids }, { gtm }): Promise<CallToolResult> => {
+			const path = versionPath({ ...ids, versionId: containerVersionId });
+			if (confirm !== true) {
+				const [version, live] = await Promise.all([versions.get(gtm, { path }), liveVersion(gtm, containerPath(ids))]);
+				if (version.deleted) return fail(`Version ${containerVersionId} is deleted, so it cannot be published.`);
+				const alreadyLive = live?.containerVersionId === containerVersionId;
+				return ok({
+					preview: true,
+					wouldPublish: summarizeVersion(version) ?? {},
+					currentlyLive: live
+						? { containerVersionId: live.containerVersionId, name: live.name }
+						: "nothing (this container has never been published)",
+					...(alreadyLive ? { alreadyLive: true } : {}),
+					message:
+						"Nothing was published. Show the user what this version contains and what is live now, get their explicit go-ahead, then call publish_version again with confirm: true.",
+				});
+			}
+			const response = await versions.publish(gtm, { path });
+			if (response?.compilerError) {
+				return fail(
+					`Version ${containerVersionId} does not compile, so nothing was published. Fix the errors in GTM, then create and publish a new version.`,
+				);
+			}
+			return ok({
+				published: versionHeadline(response?.containerVersion ?? { containerVersionId }),
+				note: `Version ${containerVersionId} is now LIVE on every site that loads this container. To roll back, publish an earlier version (list_versions).`,
+			});
 		},
 	);
 

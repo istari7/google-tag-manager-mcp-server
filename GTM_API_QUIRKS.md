@@ -155,13 +155,14 @@ Add an entry whenever manual testing turns up something new, with a test.
 
 - **Google:** every create, update and delete changes only the workspace.
   Nothing reaches the site until `create_version` and then `publish`.
-- **We:** this server never publishes (README, "What this server will never
-  do"); a person publishes in the GTM UI. Every workspace write (create,
-  update, delete, folders, built-ins) ends its result with
-  `UNPUBLISHED_CHANGES_NOTE` from `quirks.ts`. `create_workspace` uses
+- **We:** only `publish_version` makes a version live, and only on a second
+  call with `confirm: true` (README, "Publishing and deleting"). Every
+  workspace write (create, update, delete, folders, built-ins) ends its result
+  with `UNPUBLISHED_CHANGES_NOTE` from `quirks.ts`. `create_workspace` uses
   `WORKSPACE_NOT_LIVE_NOTE` and `create_version` says the version is saved but
-  not live until a person publishes it in the GTM UI. No tool ever says "now
-  live". Tool descriptions and `get_workspace_status` say the same thing.
+  not live, and that publishing needs the user's explicit go-ahead. Only a
+  confirmed `publish_version` says "now LIVE". Tool descriptions and
+  `get_workspace_status` say the same thing.
 - **Tests:** `Q9 the note tells the model how to make a change live`;
   tools/workspaces: `Q9 says pending changes are not live yet`; every write test in
   `test/tools/` checks the note.
@@ -360,8 +361,9 @@ Add an entry whenever manual testing turns up something new, with a test.
   screen and then calls a write tool.
 - **We:** map these to their own messages: enable the API (keeping Google's
   link), or reconnect and approve every permission. Neither is retried.
-  (There is no publish tool, so `tagmanager.publish` is never needed: the
-  client refuses every `:publish` request before calling Google.)
+  The same scope message covers `publish_version`, `delete_workspace` and
+  `delete_container` on a deployment that leaves out `tagmanager.publish` or
+  `tagmanager.delete.containers`.
 - **Tests:** client: `403 API disabled → enable-the-API message that keeps Google's console link`,
   `403 insufficient scopes → reconnect-and-approve message`.
 
@@ -378,3 +380,18 @@ Add an entry whenever manual testing turns up something new, with a test.
   tells the model to check `get_workspace_status` for the extra Google tag
   after creating one of these tags and to point it out to the user.
 - **Tests:** none yet.
+
+## Workspace lifecycle
+
+### Q24. Workspaces disappear and reappear on their own
+
+- **Google:** `create_version` consumes a non-default workspace: after the
+  version is saved, the workspace is gone from `list_workspaces` (it may hand
+  back a `newWorkspacePath`). Deleting the last remaining workspace, even
+  `Default Workspace`, succeeds, and GTM immediately creates a fresh
+  `Default Workspace` with a new ID. A container never ends up with zero
+  workspaces (both confirmed live, 2026-11-09).
+- **We:** `create_version` reports a replacement workspace when Google names
+  one. `delete_workspace` lets Google decide; the model should call
+  `list_workspaces` again before editing rather than reuse an old workspace ID.
+- **Tests:** none (Google-side behaviour).

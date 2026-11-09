@@ -139,21 +139,6 @@ export class GtmInputError extends Error {
 	override readonly name: string = "GtmInputError";
 }
 
-export const FORBIDDEN_OPERATION_MESSAGE =
-	"Publishing/deleting containers is disabled on this server by design. Do it in the GTM UI.";
-
-/**
- * A request the client refuses outright, before any network call: publishing a container
- * version, or deleting a container or account (src/gtm/client.ts, README "What this server
- * will never do"). Extends GtmInputError so tools report the message as-is.
- */
-export class GtmForbiddenOperationError extends GtmInputError {
-	override readonly name = "GtmForbiddenOperationError";
-	constructor() {
-		super(FORBIDDEN_OPERATION_MESSAGE);
-	}
-}
-
 function str(value: unknown): string | undefined {
 	return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
 }

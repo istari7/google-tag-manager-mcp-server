@@ -235,10 +235,10 @@ Check that the Tag Manager API is enabled in the Google Cloud project, that the 
 (`auth_status` lists them), and that the Google account has access to that GTM account or
 container in the GTM UI.
 
-**The AI says it can't publish a version or delete a container.**
-That is by design: this server never publishes and never deletes containers or accounts (see the
-README, "What this server will never do"). Ask it to `create_version`, then publish that version
-yourself in the GTM UI (Versions › Publish).
+**`publish_version`, `delete_workspace` or `delete_container` fails with a permission error.**
+They need the `tagmanager.publish` and `tagmanager.delete.containers` scopes. Add the missing one
+to the consent screen's Data Access page and to `GOOGLE_SCOPES` in `wrangler.jsonc`, redeploy, then
+reconnect the client so Google asks for it (see the README, "Publishing and deleting").
 
 **"Google session expired. Reconnect the GTM connector."**
 The Worker couldn't refresh the Google token during a tool call. Reconnect from your client.
