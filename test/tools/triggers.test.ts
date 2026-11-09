@@ -305,7 +305,26 @@ describe("delete_trigger", () => {
 		expect(writes(mock.gtm()).map(describeCall)).toMatchObject([{ method: "DELETE", path: TRIGGER }]);
 		expect(result.isError).toBe(true);
 		expect(result.text).toBe(
-			'Nothing was deleted: GTM refuses to delete trigger 34 while it is still used by tags 12 "GA4 - outbound", 14 "Blocked on outbound"; trigger groups 40 "Group - outbound + scroll". First remove it from those tags\' firingTriggerId/blockingTriggerId (update_tag) and from those trigger groups, or delete them.',
+			'Nothing was deleted: GTM refuses to delete trigger 34 while it is still used by tags 12 "GA4 - outbound", 14 "Blocked on outbound"; trigger groups 40 "Group - outbound + scroll". First remove it from those tags\' firingTriggerId/blockingTriggerId (update_tag) and from those trigger groups\' list of triggers (update_trigger), or delete them.',
+		);
+	});
+
+	it("Q26 a trigger used only by a trigger group: the advice names only the group, not tags", async () => {
+		const routes = usageRoutes();
+		mockGtm({
+			[TRIGGER]: byMethod({ GET: () => json(linkClickTrigger), DELETE: () => json(errors.stillInUse400, 400) }),
+			[`${WORKSPACE}/tags`]: pages("tag", [[{ tagId: "13", name: "Unrelated", firingTriggerId: ["2"] }]]),
+			[`${WORKSPACE}/triggers`]: routes[`${WORKSPACE}/triggers`],
+		});
+		const preview = (await callTool("delete_trigger", TRIGGER_ARGS)).json<{ wouldDelete: Record<string, unknown> }>();
+		expect(preview.wouldDelete).not.toHaveProperty("usedByTags");
+		expect(preview.wouldDelete.warning).toBe(
+			"GTM will refuse to delete this trigger while these still use it. First remove it from those trigger groups' list of triggers (update_trigger), or delete them.",
+		);
+		const result = await callTool("delete_trigger", { ...TRIGGER_ARGS, confirm: true });
+		expect(result.isError).toBe(true);
+		expect(result.text).toBe(
+			'Nothing was deleted: GTM refuses to delete trigger 34 while it is still used by trigger groups 40 "Group - outbound + scroll". First remove it from those trigger groups\' list of triggers (update_trigger), or delete them.',
 		);
 	});
 

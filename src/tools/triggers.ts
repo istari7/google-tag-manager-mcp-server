@@ -15,13 +15,19 @@ import {
 	parametersInput,
 	workspaceInput,
 } from "./inputs";
-import { referencePreview, rejectedDeleteMessage, triggerReferences } from "./references";
+import { type References, referencePreview, rejectedDeleteMessage, triggerReferences } from "./references";
 import { isEmptyPatch, okWrite } from "./write";
 
 const triggers = accounts.containers.workspaces.triggers;
 
-const TRIGGER_FIX =
-	"First remove it from those tags' firingTriggerId/blockingTriggerId (update_tag) and from those trigger groups, or delete them.";
+/** How to free the trigger, naming only the kinds of entity that use it (Q26). */
+function triggerFix(refs: References): string {
+	const steps = [
+		(refs.found.usedByTags?.length ?? 0) > 0 && "from those tags' firingTriggerId/blockingTriggerId (update_tag)",
+		(refs.found.usedByTriggerGroups?.length ?? 0) > 0 && "from those trigger groups' list of triggers (update_trigger)",
+	].filter((s): s is string => typeof s === "string");
+	return steps.length > 0 ? `First remove it ${steps.join(" and ")}, or delete them.` : "";
+}
 
 /** One list_triggers row; also the delete_trigger preview. */
 export function triggerRow(t: Trigger) {
@@ -156,9 +162,13 @@ export const triggerTools: ToolGroup = (tools) => {
 		name: "delete_trigger",
 		description: "Delete a trigger. Without confirm: true, only previews it and what uses it.",
 		// Q26: GTM refuses to delete a trigger that tags (or trigger groups) still use.
-		related: async (ids, { gtm }) =>
-			referencePreview("trigger", await triggerReferences(gtm, ids, ids.triggerId), TRIGGER_FIX),
-		rejected: async (ids, { gtm }) =>
-			rejectedDeleteMessage("trigger", ids.triggerId, await triggerReferences(gtm, ids, ids.triggerId), TRIGGER_FIX),
+		related: async (ids, { gtm }) => {
+			const refs = await triggerReferences(gtm, ids, ids.triggerId);
+			return referencePreview("trigger", refs, triggerFix(refs));
+		},
+		rejected: async (ids, { gtm }) => {
+			const refs = await triggerReferences(gtm, ids, ids.triggerId);
+			return rejectedDeleteMessage("trigger", ids.triggerId, refs, triggerFix(refs));
+		},
 	});
 };

@@ -142,7 +142,7 @@ that this table lists every tool, in its group.
 | | `delete_user_permission` | Removes a user from an account | destructive |
 | `container-admin` (optional) | `get_container` | Gets a container's settings, tag IDs, features and fingerprint | read |
 | | `create_container` | Creates a container (web, android, ios, amp or server) | admin |
-| | `update_container` | Changes a container's name, domains, notes or server URLs (other fields are kept) | admin |
+| | `update_container` | Changes a container's name, domains, notes or server URLs (other fields are kept; warns when GTM drops one, as it does `domainName` on web containers) | admin |
 | | `combine_containers` | Google tag containers only (refused on `GTM-…` ones): merges another container of the account into this one; the preview shows both | destructive |
 | | `move_tag_id` | Google tag containers only (refused on `GTM-…` ones): moves a tag ID out into a new container; confirming also needs `acceptTerms: true` | destructive |
 | `folder-admin` (optional) | `get_folder` | Gets a folder with its fingerprint | read |

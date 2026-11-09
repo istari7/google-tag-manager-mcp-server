@@ -169,6 +169,47 @@ function withStored(change: Entity, stored: Entity): Entity {
 	};
 }
 
+interface ChangeRow {
+	changeStatus?: Entity["changeStatus"];
+	kind?: string;
+	id?: string;
+	name?: string;
+}
+
+/**
+ * The result of a bulk update, per change the caller asked for (Q40). Google's response lists
+ * entities with their changeStatus against the workspace's base version, not what this call
+ * did (an entity added earlier in the workspace and updated now comes back "added"), leaves
+ * deleted ones out, and can list entities the call didn't name. So `changed` is the caller's
+ * own changes, an added one with the ID GTM gave it (matched by kind and name), and anything
+ * else in the response is listed apart.
+ */
+function appliedChanges(rows: readonly ChangeRow[], returned: readonly Entity[]) {
+	const left: ChangeRow[] = returned.flatMap((e) => describeEntity(e) ?? []);
+	const take = (match: (e: ChangeRow) => boolean) => {
+		const i = left.findIndex(match);
+		return i < 0 ? undefined : left.splice(i, 1)[0];
+	};
+	const changed = rows.map((row) => {
+		if (row.changeStatus === "added") {
+			const created = take((e) => e.kind === row.kind && e.name === row.name);
+			return created?.id ? { ...row, id: created.id } : row;
+		}
+		take((e) => e.kind === row.kind && e.id === row.id);
+		return row;
+	});
+	return {
+		changed,
+		...(left.length > 0
+			? {
+					alsoReportedByGtm: left,
+					alsoReportedNote:
+						"GTM's response also listed these, which were not in changes. Check them with get_* if it matters.",
+				}
+			: {}),
+	};
+}
+
 export const workspaceAdminTools: ToolGroup = (tools) => {
 	tools.add(
 		"sync_workspace",
@@ -335,13 +376,7 @@ export const workspaceAdminTools: ToolGroup = (tools) => {
 					),
 				apply: async () => {
 					const response = await workspaces.bulkUpdate(gtm, { path: workspacePath(ids) }, { changes: checked });
-					return okWrite(
-						{
-							applied: changes.length,
-							changed: (response?.changes ?? []).map((e) => ({ ...describeEntity(e), changeStatus: e.changeStatus })),
-						},
-						{ warnings },
-					);
+					return okWrite({ applied: changes.length, ...appliedChanges(rows, response?.changes ?? []) }, { warnings });
 				},
 			});
 		},

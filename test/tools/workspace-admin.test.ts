@@ -314,9 +314,50 @@ describe("bulk_update_workspace", () => {
 		]);
 		expect(result.json()).toEqual({
 			applied: 4,
-			changed: [{ kind: "folder", id: "20", name: "Checkout", changeStatus: "added" }],
+			// Q40: what this call did to each change; the added folder gets the ID GTM gave it.
+			changed: [
+				{ changeStatus: "added", kind: "folder", id: "20", name: "Checkout" },
+				{ changeStatus: "added", kind: "tag", id: "new_2", name: "HTML - x" },
+				{ changeStatus: "updated", kind: "trigger", id: "34", name: "Link - Outbound" },
+				{ changeStatus: "deleted", kind: "tag", id: "12", name: "GA4 - Event - sign_up" },
+			],
 			warnings: [`changes[2] (trigger 34): ${AUTO_EVENT_FILTER_WARNING}`],
 			note: UNPUBLISHED_CHANGES_NOTE,
+		});
+	});
+
+	it("Q40 reports what the call did, not GTM's changeStatus against the base version, and lists extra entities apart", async () => {
+		// Seen live: an updated variable came back "added" (it was added earlier in the workspace),
+		// the deleted trigger was missing, and an untouched trigger was listed.
+		mockGtm({
+			[BULK]: byMethod({
+				POST: reply({
+					changes: [
+						{ changeStatus: "added", variable: { variableId: "98", name: "Const - new" } },
+						{ changeStatus: "added", variable: { variableId: "91", name: "Const - x" } },
+						{ changeStatus: "added", trigger: { triggerId: "92", name: "Custom - y" } },
+					],
+				}),
+			}),
+		});
+		const result = await callTool("bulk_update_workspace", {
+			...WORKSPACE_ARGS,
+			confirm: true,
+			changes: [
+				{ changeStatus: "added", variable: { variableId: "new_1", name: "Const - new", type: "c" } },
+				{ changeStatus: "updated", variable: { variableId: "91", name: "Const - x", type: "c" } },
+				{ changeStatus: "deleted", trigger: { triggerId: "93", name: "Group", type: "triggerGroup" } },
+			],
+		});
+		expect(result.json()).toMatchObject({
+			applied: 3,
+			changed: [
+				{ changeStatus: "added", kind: "variable", id: "98", name: "Const - new" },
+				{ changeStatus: "updated", kind: "variable", id: "91", name: "Const - x" },
+				{ changeStatus: "deleted", kind: "trigger", id: "93", name: "Group" },
+			],
+			alsoReportedByGtm: [{ kind: "trigger", id: "92", name: "Custom - y" }],
+			alsoReportedNote: expect.stringContaining("not in changes"),
 		});
 	});
 

@@ -108,6 +108,36 @@ describe("update_container", () => {
 		expect(writes(mock.gtm())).toHaveLength(0);
 	});
 
+	it.each([
+		["omitted keeps the stored domains", {}, ["example.com"]],
+		["[] clears them", { domainName: [] }, []],
+		["a list replaces them", { domainName: ["a.example", "b.example"] }, ["a.example", "b.example"]],
+	])("Q1/Q7 domainName: %s; the other settings are kept", async (_label, patch, sent) => {
+		const mock = mockGtm({
+			[CONTAINER]: byMethod({ GET: reply(container), PUT: reply({ ...container, name: "Renamed", domainName: sent }) }),
+		});
+		const result = await callTool("update_container", { ...CONTAINER_ARGS, name: "Renamed", ...patch });
+		const { fingerprint: _fp, ...rest } = container;
+		expect(mock.gtm().map(describeCall)[1]?.body).toEqual({ ...rest, name: "Renamed", domainName: sent });
+		expect(result.json()).not.toHaveProperty("warnings");
+	});
+
+	it("Q39 warns when GTM answers 200 but drops the domainName it was sent", async () => {
+		const stored = { ...container, domainName: undefined };
+		mockGtm({
+			[CONTAINER]: byMethod({ GET: reply(stored), PUT: reply({ ...stored, notes: "probe" }) }),
+		});
+		const result = await callTool("update_container", {
+			...CONTAINER_ARGS,
+			domainName: ["tmp.example.com"],
+			notes: "probe",
+		});
+		expect(result.isError).toBeFalsy();
+		expect(result.json<{ warnings: string[] }>().warnings).toEqual([
+			'GTM accepted the update but did not store domainName: it now has [], not ["tmp.example.com"]. GTM drops domainName on web containers (Q39).',
+		]);
+	});
+
 	it("refuses an empty patch before calling Google", async () => {
 		const mock = mockGtm();
 		expect((await callTool("update_container", CONTAINER_ARGS)).isError).toBe(true);

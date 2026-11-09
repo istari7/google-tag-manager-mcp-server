@@ -460,11 +460,13 @@ Add an entry whenever manual testing turns up something new, with a test.
   `{{Name}}`. When there are any, the preview warns that GTM will refuse the
   delete until they are removed. When a confirmed delete still gets a 400, the
   tool looks the references up again and returns them in the error, with how
-  to remove them; with none found, it says what usually causes the 400.
+  to remove them (naming only the kinds that use it: tags' trigger lists
+  and/or trigger groups); with none found, it says what usually causes the 400.
   References from places we don't scan (zones, clients, transformations,
   custom templates) are not detected.
 - **Tests:** tools/triggers: `Q26 without confirm only reads, and lists the tags and trigger groups…`,
   `Q26 with confirm: true, GTM's bare 400 becomes an error naming what still uses the trigger`,
+  `Q26 a trigger used only by a trigger group: the advice names only the group, not tags`,
   `Q26 a 400 with no reference found still says what usually causes it`;
   tools/variables: `Q26 without confirm only reads, and lists what uses {{name}}…`,
   `Q26 with confirm: true, GTM's bare 400 becomes an error naming what still uses the variable`.
@@ -675,3 +677,37 @@ entries are what that run showed.
   `src/gtm/errors.ts`).
 - **Tests:** client: `Q38 a zone 404 adds that zones need GTM 360…`,
   `Q38 a user-permission 404 'User not found' says the email has no Google account…`.
+
+### Q39. `domainName` is dropped on web containers
+
+- **Google:** `containers.update` on a web container with `domainName:
+  ["tmp.example.com"]` (and again with two domains plus a `notes` change)
+  answered 200 with a new fingerprint and the other changes stored, but no
+  `domainName` in the response or in a later `containers.get`. Our PUT body
+  carried the list (get-merge-put, Q1/Q7), so Google drops it. Not checked on
+  other container types or on `containers.create`.
+- **We:** `update_container` keeps get-merge-put as for every update
+  (omitted fields are kept, `[]` clears). After the PUT it compares each
+  setting it was asked to change (name, domainName, notes,
+  taggingServerUrls) with Google's response and adds a warning for any that
+  didn't stick, so the model doesn't report a change that didn't happen.
+- **Tests:** tools/container-admin: `Q1/Q7 domainName: omitted keeps the stored domains…`,
+  `Q1/Q7 domainName: [] clears them…`, `Q1/Q7 domainName: a list replaces them…`,
+  `Q39 warns when GTM answers 200 but drops the domainName it was sent`.
+
+### Q40. `bulk_update`'s response is about the workspace, not the call
+
+- **Google:** the `changes` in a `workspaces.bulk_update` response carry each
+  entity's `changeStatus` against the workspace's base version, not what the
+  call did. Seen live: a variable updated by the call (added earlier in the
+  same workspace) came back `added`; a trigger the call deleted (also added
+  earlier in the workspace) was missing; and a trigger the call didn't name
+  was listed. Discovery says the list "does not include entities that were
+  deleted or updated by the system".
+- **We:** `bulk_update_workspace` reports `changed` from the caller's own
+  changes, with the `changeStatus` it asked for and the entity's name. An
+  added entity gets the ID GTM gave it, matched in the response by kind and
+  name; if none matches, it keeps its `new_N` ID. Response entities that
+  match no change are listed apart as `alsoReportedByGtm`.
+- **Tests:** tools/workspace-admin: `Q33 with confirm: true POSTs … the deleted tag completed by a GET`,
+  `Q40 reports what the call did, not GTM's changeStatus against the base version…`.

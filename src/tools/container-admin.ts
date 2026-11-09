@@ -59,6 +59,30 @@ function notForGtmContainers(tool: string, c: Container): string {
 	return `Nothing was changed: ${tool} works only on Google tag containers (the ones a Google tag such as G-… or AW-… creates), and container ${c.containerId} is a Tag Manager container (GTM-…). GTM refuses it there. To move tags between GTM containers, export and import them in the GTM UI (Admin > Export / Import Container).`;
 }
 
+/** A setting as GTM reports it: an absent list or string is the same as an empty one. */
+function settingValue(value: string | string[] | undefined, list: boolean): string {
+	return JSON.stringify(value ?? (list ? [] : ""));
+}
+
+/**
+ * Q39: GTM answers 200 to a containers.update that sets domainName on a web container but does
+ * not store it. Warn about every field the caller set that the response doesn't carry back, so
+ * the model doesn't report a change that didn't happen.
+ */
+function notStored(
+	patch: Pick<Container, "name" | "domainName" | "notes" | "taggingServerUrls">,
+	result: Container,
+): string[] {
+	const fields = ["name", "domainName", "notes", "taggingServerUrls"] as const;
+	const isList = (f: (typeof fields)[number]) => f === "domainName" || f === "taggingServerUrls";
+	return fields
+		.filter((f) => patch[f] !== undefined && settingValue(patch[f], isList(f)) !== settingValue(result[f], isList(f)))
+		.map((f) => {
+			const hint = f === "domainName" ? " GTM drops domainName on web containers (Q39)." : "";
+			return `GTM accepted the update but did not store ${f}: it now has ${settingValue(result[f], isList(f))}, not ${settingValue(patch[f], isList(f))}.${hint}`;
+		});
+}
+
 const settingsFields = {
 	domainName: z.array(z.string()).optional(),
 	notes: z.string().optional(),
@@ -126,7 +150,10 @@ export const containerAdminTools: ToolGroup = (tools) => {
 				put: (body, fp) => containers.update(gtm, { path, fingerprint: fp }, body),
 				normalize: (p) => ({ value: p, warnings: [] }),
 			});
-			return okWrite({ container: containerDetail(result) }, { note: CONTAINER_SETTINGS_NOTE });
+			return okWrite(
+				{ container: containerDetail(result) },
+				{ warnings: notStored(patch, result), note: CONTAINER_SETTINGS_NOTE },
+			);
 		},
 	);
 
