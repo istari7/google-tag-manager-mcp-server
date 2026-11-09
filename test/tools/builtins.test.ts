@@ -1,10 +1,21 @@
-// enable_built_in_variables: types checked against the generated enum, sent as repeated
-// `type` query parameters.
+// enable_built_in_variables / disable_built_in_variables: types checked against the generated
+// enum, sent as repeated `type` query parameters.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UNPUBLISHED_CHANGES_NOTE } from "../../src/gtm/quirks";
 import { BUILT_IN_TYPES } from "../../src/tools/builtins";
-import { callTool, describeCall, json, mockGtm, queryAll, WORKSPACE, WORKSPACE_ARGS } from "./helpers";
+import {
+	byMethod,
+	callTool,
+	describeCall,
+	empty,
+	json,
+	mockGtm,
+	queryAll,
+	WORKSPACE,
+	WORKSPACE_ARGS,
+	writes,
+} from "./helpers";
 
 afterEach(() => {
 	vi.restoreAllMocks();
@@ -88,5 +99,63 @@ describe("enable_built_in_variables", () => {
 		expect(BUILT_IN_TYPES).toHaveLength(116);
 		expect(BUILT_IN_TYPES).not.toContain("builtInVariableTypeUnspecified");
 		expect(new Set(BUILT_IN_TYPES).size).toBe(BUILT_IN_TYPES.length);
+	});
+});
+
+describe("disable_built_in_variables", () => {
+	const BUILT_INS = `${WORKSPACE}/built_in_variables`;
+	const listed = () =>
+		json({
+			builtInVariable: [
+				{ type: "pageUrl", name: "Page URL" },
+				{ type: "clickUrl", name: "Click URL" },
+			],
+		});
+
+	it("without confirm: true lists what is enabled and previews, changing nothing", async () => {
+		const mock = mockGtm({ [BUILT_INS]: byMethod({ GET: listed }) });
+		const result = await callTool("disable_built_in_variables", { ...WORKSPACE_ARGS, types: ["clickUrl", "formId"] });
+		expect(writes(mock.gtm())).toHaveLength(0);
+		expect(result.json()).toEqual({
+			preview: true,
+			wouldDisable: [{ type: "clickUrl", name: "Click URL" }],
+			notEnabled: ["formId"],
+			message:
+				"Nothing was changed. Check nothing still uses these variables, get the user's go-ahead, then call disable_built_in_variables again with confirm: true.",
+		});
+	});
+
+	it("with confirm: true DELETEs {workspace}/built_in_variables?type=... for the enabled ones only", async () => {
+		const mock = mockGtm({ [BUILT_INS]: byMethod({ GET: listed, DELETE: empty }) });
+		const result = await callTool("disable_built_in_variables", {
+			...WORKSPACE_ARGS,
+			types: ["clickUrl", "pageUrl", "formId"],
+			confirm: true,
+		});
+		const del = writes(mock.gtm());
+		expect(del.map(describeCall)).toMatchObject([{ method: "DELETE", path: BUILT_INS, body: undefined }]);
+		expect(queryAll(del[0], "type")).toEqual(["clickUrl", "pageUrl"]);
+		expect(result.json()).toEqual({
+			disabled: [
+				{ type: "clickUrl", name: "Click URL" },
+				{ type: "pageUrl", name: "Page URL" },
+			],
+			notEnabled: ["formId"],
+			note: UNPUBLISHED_CHANGES_NOTE,
+		});
+	});
+
+	it("does nothing when none of the types is enabled", async () => {
+		const mock = mockGtm({ [BUILT_INS]: byMethod({ GET: listed }) });
+		const result = await callTool("disable_built_in_variables", {
+			...WORKSPACE_ARGS,
+			types: ["formId"],
+			confirm: true,
+		});
+		expect(writes(mock.gtm())).toHaveLength(0);
+		expect(result.json()).toEqual({
+			notEnabled: ["formId"],
+			message: "Nothing to disable: none of these built-ins is enabled.",
+		});
 	});
 });

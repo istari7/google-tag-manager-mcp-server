@@ -56,20 +56,20 @@ Without this, sign-in works but every tool call fails with a permission error.
    | `https://www.googleapis.com/auth/tagmanager.edit.containerversions` | `create_version` |
    | `https://www.googleapis.com/auth/tagmanager.publish` | `publish_version` (optional) |
    | `https://www.googleapis.com/auth/tagmanager.delete.containers` | `delete_workspace`, `delete_container` (optional) |
+   | `https://www.googleapis.com/auth/tagmanager.manage.accounts` | `get_account`, `update_account` (optional) |
+   | `https://www.googleapis.com/auth/tagmanager.manage.users` | User access tools (optional) |
 
    `openid`, `email` and `profile` are always requested too. They need no setup.
 
-   The last two are optional. Leave them out (here and in `GOOGLE_SCOPES`) if you don't want the
-   AI to be able to publish versions or delete workspaces and containers; those tools then fail
-   with a permission error, and `/setup` lists them.
+   The last four are optional. Leave any of them out (here and in `GOOGLE_SCOPES`) if you don't
+   want the AI to publish versions, delete workspaces and containers, change account settings or
+   manage user access; those tools then fail with a permission error.
 3. Click **Update**, then **Save**.
 
 [screenshot: Data Access page listing the Tag Manager scopes]
 
 The list must match what the Worker asks for: the `GOOGLE_SCOPES` var in `wrangler.jsonc`. The
-`/setup` page lists the scopes it requests. If `GOOGLE_SCOPES` also has
-`tagmanager.manage.accounts` or `tagmanager.manage.users`, either add them here too or remove them
-from `GOOGLE_SCOPES` (no tool uses them).
+`/setup` page lists the scopes it requests.
 
 ### Add test users (External apps in Testing only)
 

@@ -1,11 +1,34 @@
+import type { GtmClient } from "../gtm/client";
 import { accounts } from "../gtm/generated";
 import { folderPath, workspacePath } from "../gtm/paths";
 import type { ToolGroup } from "../mcp/registry";
 import { fail, okList } from "../mcp/result";
-import { gtmId, idList, nameInput, notesInput, workspaceInput } from "./inputs";
-import { okWrite } from "./write";
+import { confirmInput, gtmId, idList, nameInput, notesInput, workspaceInput } from "./inputs";
+import { deleteWithConfirm, okWrite } from "./write";
 
 const folders = accounts.containers.workspaces.folders;
+
+/** Everything in a folder. folders.entities is a POST but only reads (Discovery: "List all entities in a GTM Folder"). */
+async function folderContents(gtm: GtmClient, path: string) {
+	const pages = await gtm.listAll(
+		(pageToken) => folders.entities(gtm, { path, pageToken }),
+		(page) => [page],
+	);
+	const tags = pages.items.flatMap((p) => p.tag ?? []);
+	const triggers = pages.items.flatMap((p) => p.trigger ?? []);
+	const variables = pages.items.flatMap((p) => p.variable ?? []);
+	const defined = (list: (string | undefined)[]) => list.filter((id): id is string => id !== undefined);
+	return {
+		tagId: defined(tags.map((t) => t.tagId)),
+		triggerId: defined(triggers.map((t) => t.triggerId)),
+		variableId: defined(variables.map((v) => v.variableId)),
+		labels: [
+			...tags.map((t) => `tag ${t.tagId} "${t.name}"`),
+			...triggers.map((t) => `trigger ${t.triggerId} "${t.name}"`),
+			...variables.map((v) => `variable ${v.variableId} "${v.name}"`),
+		],
+	};
+}
 
 export const folderTools: ToolGroup = (tools) => {
 	tools.add(
@@ -61,6 +84,43 @@ export const folderTools: ToolGroup = (tools) => {
 			await folders.moveEntitiesToFolder(gtm, { path: folderPath(ids), tagId, triggerId, variableId }, {});
 			// okWrite's compact() drops the empty lists.
 			return okWrite({ folderId: ids.folderId, moved: { tagId, triggerId, variableId } });
+		},
+	);
+
+	tools.add(
+		"delete_folder",
+		{
+			description:
+				"Delete a folder. Its tags, triggers and variables are kept, outside any folder. Without confirm: true, only previews.",
+			input: workspaceInput.extend({ folderId: gtmId("Folder ID"), confirm: confirmInput("delete") }),
+			annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+		},
+		async ({ confirm, ...ids }, { gtm }) => {
+			const path = folderPath(ids);
+			return deleteWithConfirm({
+				confirm,
+				kind: "folder",
+				id: ids.folderId,
+				get: () => folders.get(gtm, { path }),
+				summarize: (f) => ({ folderId: f.folderId, name: f.name }),
+				related: async () => {
+					const { labels } = await folderContents(gtm, path);
+					return { contains: labels, containsNote: labels.length ? "These are kept, outside any folder." : undefined };
+				},
+				// Q25: GTM refuses to delete a folder that still holds anything, so move its contents
+				// out first (folder "0", Q19), then delete it.
+				remove: async () => {
+					const { tagId, triggerId, variableId } = await folderContents(gtm, path);
+					if (tagId.length + triggerId.length + variableId.length > 0) {
+						await folders.moveEntitiesToFolder(
+							gtm,
+							{ path: folderPath({ ...ids, folderId: "0" }), tagId, triggerId, variableId },
+							{},
+						);
+					}
+					await folders.delete(gtm, { path });
+				},
+			});
 		},
 	);
 };

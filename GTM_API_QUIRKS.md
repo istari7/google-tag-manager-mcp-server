@@ -376,10 +376,14 @@ Add an entry whenever manual testing turns up something new, with a test.
   destination Google tag (e.g. "Google Analytics G-…") plus `gtagConfig`
   entries in the workspace, even when the created tag is paused. Deleting
   those tags does not remove the `gtagConfig` entries (confirmed live).
-- **We:** no handling yet; documented here. The `tags` best-practices topic
-  tells the model to check `get_workspace_status` for the extra Google tag
-  after creating one of these tags and to point it out to the user.
-- **Tests:** none yet.
+- **We:** the `tags` best-practices topic tells the model to check
+  `get_workspace_status` for the extra Google tag after creating one of these
+  tags and to point it out to the user. To clean up, delete the auto-created
+  Google tag with `delete_tag` and the leftover configs (seen live:
+  `ogt_auto_events`, `ogt_1p_data_v2`) with `list_gtag_configs` /
+  `delete_gtag_config`; that leaves the workspace with no trace (confirmed
+  live, 2026-11-09).
+- **Tests:** tools/gtag-configs (requests and confirm gating).
 
 ## Workspace lifecycle
 
@@ -395,3 +399,14 @@ Add an entry whenever manual testing turns up something new, with a test.
   one. `delete_workspace` lets Google decide; the model should call
   `list_workspaces` again before editing rather than reuse an old workspace ID.
 - **Tests:** none (Google-side behaviour).
+
+### Q25. A folder must be empty before it can be deleted
+
+- **Google:** `folders.delete` on a folder that still holds a tag, trigger or
+  variable fails with a bare 400 ("Returned an error response for your
+  request"). Once its contents are moved out, the same call succeeds (confirmed
+  live, 2026-11-09).
+- **We:** `delete_folder` lists the folder's contents in its preview. When
+  confirmed, it moves them out of any folder (`move_entities_to_folder` to
+  folder `0`, Q19), then deletes the folder, so nothing in it is lost.
+- **Tests:** tools/folders: `Q25 with confirm: true moves the contents out (folder 0) before the DELETE`.

@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { accounts, type BuiltInVariable } from "../gtm/generated";
-import { workspacePath } from "../gtm/paths";
+import { builtInVariablesPath, workspacePath } from "../gtm/paths";
 import type { ToolGroup } from "../mcp/registry";
-import { okList } from "../mcp/result";
-import { workspaceInput } from "./inputs";
+import { ok, okList } from "../mcp/result";
+import { confirmInput, workspaceInput } from "./inputs";
 import { okWrite } from "./write";
 
 const builtIns = accounts.containers.workspaces.builtInVariables;
@@ -198,6 +198,41 @@ export const builtInTools: ToolGroup = (tools) => {
 				return okWrite({ alreadyEnabled }, { note: "Nothing changed: all requested built-ins were already enabled." });
 			}
 			return okWrite({ enabled, alreadyEnabled });
+		},
+	);
+
+	tools.add(
+		"disable_built_in_variables",
+		{
+			description:
+				"Disable built-in variables in a workspace. Anything still using {{Name}} then breaks. Without confirm: true, only previews.",
+			input: workspaceInput.extend({ types: builtInTypesInput, confirm: confirmInput("disable them") }),
+			annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+		},
+		async ({ types, confirm, ...ids }, { gtm }) => {
+			const parent = workspacePath(ids);
+			const { items } = await gtm.listAll(
+				(pageToken) => builtIns.list(gtm, { parent, pageToken }),
+				(page) => page.builtInVariable,
+			);
+			const enabled = new Map(items.map((b) => [b.type, b.name]));
+			const toDisable = types.filter((t) => enabled.has(t));
+			const notEnabled = types.filter((t) => !enabled.has(t));
+			if (toDisable.length === 0) {
+				return ok({ notEnabled, message: "Nothing to disable: none of these built-ins is enabled." });
+			}
+			const rows = toDisable.map((type) => ({ type, name: enabled.get(type) }));
+			if (confirm !== true) {
+				return ok({
+					preview: true,
+					wouldDisable: rows,
+					...(notEnabled.length ? { notEnabled } : {}),
+					message:
+						"Nothing was changed. Check nothing still uses these variables, get the user's go-ahead, then call disable_built_in_variables again with confirm: true.",
+				});
+			}
+			await builtIns.delete(gtm, { path: builtInVariablesPath(ids), type: toDisable });
+			return okWrite({ disabled: rows, notEnabled });
 		},
 	);
 };

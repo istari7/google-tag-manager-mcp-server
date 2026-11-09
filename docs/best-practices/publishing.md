@@ -26,8 +26,13 @@ in the GTM UI.
   kept; a list you send replaces the stored list, and `[]` empties it.
 - A fingerprint conflict means someone else edited the entity in the
   meantime. Fetch it again and redo your change on top; never try to force it.
-- `delete_*` tools do nothing without `confirm: true`. Call them without it
-  first, show the user the preview, and confirm only after they agree.
+- `delete_*` tools, `disable_built_in_variables` and `set_user_permission`
+  do nothing without `confirm: true`. Call them without it first, show the
+  user the preview, and confirm only after they agree.
+- Account settings and user access (`update_account`, `set_user_permission`,
+  `delete_user_permission`) change at once, outside any workspace or
+  version. Never change who has access unless the user asked for that
+  specific change.
 
 ## Stage 3: review with the user
 

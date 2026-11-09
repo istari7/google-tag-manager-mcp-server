@@ -36,6 +36,37 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
     "args": [
       "accountId",
     ],
+    "description": "Get a GTM account's settings: name, data sharing and features, plus its fingerprint for update_account.",
+    "name": "get_account",
+    "required": [
+      "accountId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "name",
+      "shareData",
+      "fingerprint",
+    ],
+    "description": "Rename a GTM account or change its data-sharing setting. Takes effect immediately (not versioned).",
+    "name": "update_account",
+    "required": [
+      "accountId",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+    ],
     "description": "List the containers in a GTM account, with their public IDs (GTM-XXXX) and usage context.",
     "name": "list_containers",
     "required": [
@@ -87,6 +118,57 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
     "required": [
       "accountId",
       "containerId",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+    ],
+    "description": "List who can access a GTM account: each user's account role and per-container permissions.",
+    "name": "list_user_permissions",
+    "required": [
+      "accountId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "emailAddress",
+      "accountPermission",
+      "containerAccess",
+      "confirm",
+    ],
+    "description": "Add a user to a GTM account or change their access. Containers not listed keep their access. Without confirm: true, only previews.",
+    "name": "set_user_permission",
+    "required": [
+      "accountId",
+      "emailAddress",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "emailAddress",
+      "confirm",
+    ],
+    "description": "Remove a user's access to a GTM account and all its containers. Without confirm: true, only previews.",
+    "name": "delete_user_permission",
+    "required": [
+      "accountId",
+      "emailAddress",
     ],
   },
   {
@@ -582,6 +664,28 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
   },
   {
     "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "types",
+      "confirm",
+    ],
+    "description": "Disable built-in variables in a workspace. Anything still using {{Name}} then breaks. Without confirm: true, only previews.",
+    "name": "disable_built_in_variables",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "types",
+    ],
+  },
+  {
+    "annotations": {
       "readOnlyHint": true,
     },
     "args": [
@@ -641,6 +745,67 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "containerId",
       "workspaceId",
       "folderId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "folderId",
+      "confirm",
+    ],
+    "description": "Delete a folder. Its tags, triggers and variables are kept, outside any folder. Without confirm: true, only previews.",
+    "name": "delete_folder",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "folderId",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+    ],
+    "description": "List a workspace's Google tag configs (gtagConfig), which GTM creates with GA4, Google Ads and Floodlight tags.",
+    "name": "list_gtag_configs",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "gtagConfigId",
+      "confirm",
+    ],
+    "description": "Delete a Google tag config, e.g. one left behind after its GA4 or Ads tag was deleted. Without confirm: true, only previews.",
+    "name": "delete_gtag_config",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "gtagConfigId",
     ],
   },
   {

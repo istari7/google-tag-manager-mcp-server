@@ -1,8 +1,9 @@
-// list_accounts, list_containers, lookup_container, get_container_snippet, delete_container.
+// list_accounts, get_account, update_account, list_containers, lookup_container,
+// get_container_snippet, delete_container.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Container } from "../../src/gtm/generated";
-import { LOOKUP_MAX_CALLS } from "../../src/tools/accounts";
+import { ACCOUNT_SETTINGS_NOTE, LOOKUP_MAX_CALLS } from "../../src/tools/accounts";
 import { errors } from "../fixtures/gtm";
 import {
 	ACCOUNT,
@@ -15,6 +16,7 @@ import {
 	describeCall,
 	empty,
 	FAKE_GOOGLE_TOKEN,
+	json,
 	mockGtm,
 	pages,
 	reply,
@@ -265,5 +267,50 @@ describe("delete_container", () => {
 			deleted: { kind: "container", containerId: CONTAINER_ID, publicId: "GTM-ABC1234" },
 			note: "The container is deleted. Remove its snippet from the sites that loaded it.",
 		});
+	});
+});
+
+describe("get_account / update_account", () => {
+	const account = {
+		accountId: ACCOUNT_ID,
+		name: "Example Co",
+		shareData: false,
+		fingerprint: "100",
+		path: ACCOUNT,
+		tagManagerUrl: "https://x",
+	};
+
+	it("get_account GETs the account and returns its settings and fingerprint", async () => {
+		const mock = mockGtm({ [ACCOUNT]: reply(account) });
+		const result = await callTool("get_account", { accountId: ACCOUNT_ID });
+		expect(mock.gtm().map(describeCall)).toMatchObject([{ method: "GET", path: ACCOUNT }]);
+		expect(result.json()).toEqual({ accountId: ACCOUNT_ID, name: "Example Co", shareData: false, fingerprint: "100" });
+	});
+
+	it("update_account GETs, then PUTs the merged account with ?fingerprint=", async () => {
+		const mock = mockGtm({
+			[ACCOUNT]: byMethod({
+				GET: () => json(account),
+				PUT: (call) => json({ ...(JSON.parse(call.body) as object), fingerprint: "101" }),
+			}),
+		});
+		const result = await callTool("update_account", { accountId: ACCOUNT_ID, shareData: true });
+		const [, put] = mock.gtm().map(describeCall);
+		expect(put).toMatchObject({ method: "PUT", path: ACCOUNT, query: { fingerprint: "100" } });
+		const { fingerprint: _f, ...stored } = account;
+		expect(put?.body).toEqual({ ...stored, shareData: true });
+		expect(result.json()).toEqual({
+			account: { accountId: ACCOUNT_ID, name: "Example Co", shareData: true, fingerprint: "101" },
+			note: ACCOUNT_SETTINGS_NOTE,
+		});
+	});
+
+	it("update_account fails on a stale fingerprint without writing, and on an empty change", async () => {
+		const mock = mockGtm({ [ACCOUNT]: byMethod({ GET: () => json(account) }) });
+		const stale = await callTool("update_account", { accountId: ACCOUNT_ID, name: "New", fingerprint: "99" });
+		expect(stale.isError).toBe(true);
+		const nothing = await callTool("update_account", { accountId: ACCOUNT_ID });
+		expect(nothing).toMatchObject({ isError: true, text: "Nothing to change: pass name and/or shareData." });
+		expect(mock.gtm().filter((c) => c.method !== "GET")).toHaveLength(0);
 	});
 });
