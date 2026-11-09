@@ -1,6 +1,6 @@
 // User permissions (tagmanager.manage.users): who can access a GTM account and its containers.
-// Changes apply immediately (they are not versioned), so the two write tools are confirm-gated:
-// without `confirm: true` they show the access before and after, and change nothing.
+// Changes apply immediately (they are not versioned), so the two write tools are confirm-gated
+// (./confirm.ts): without `confirm: true` they show the access before and after, and change nothing.
 
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import { z } from "zod";
@@ -8,7 +8,8 @@ import type { GtmClient } from "../gtm/client";
 import { accounts, type ContainerAccess, type UserPermission } from "../gtm/generated";
 import { accountPath } from "../gtm/paths";
 import type { ToolGroup } from "../mcp/registry";
-import { compact, fail, ok, okList } from "../mcp/result";
+import { compact, fail, okList } from "../mcp/result";
+import { confirmGate, okPreview } from "./confirm";
 import { accountInput, confirmInput, gtmId } from "./inputs";
 import { okWrite } from "./write";
 
@@ -118,24 +119,29 @@ export const userTools: ToolGroup = (tools) => {
 						accountAccess: { permission: accountPermission ?? "user" },
 						containerAccess: containerAccess ?? [],
 					};
-			if (confirm !== true) {
-				return ok({
-					preview: true,
-					action: existing ? "update" : "add",
-					...(existing ? { before: permissionRow(existing) } : {}),
-					after: permissionRow(proposed),
-					...selfWarning(emailAddress, props.email),
-					message: `Nothing was changed. Show the user this change to ${emailAddress}'s access, get their go-ahead, then call set_user_permission again with confirm: true.`,
-				});
-			}
-			const saved =
-				existing?.path !== undefined
-					? await userPermissions.update(gtm, { path: existing.path }, proposed)
-					: await userPermissions.create(gtm, { parent: accountPath({ accountId }) }, proposed);
-			return okWrite(
-				{ action: existing ? "updated" : "added", userPermission: permissionRow(saved ?? proposed) },
-				{ note: USER_ACCESS_NOTE },
-			);
+			return confirmGate({
+				confirm,
+				preview: () =>
+					okPreview(
+						{
+							action: existing ? "update" : "add",
+							...(existing ? { before: permissionRow(existing) } : {}),
+							after: permissionRow(proposed),
+							...selfWarning(emailAddress, props.email),
+						},
+						`Nothing was changed. Show the user this change to ${emailAddress}'s access, get their go-ahead, then call set_user_permission again with confirm: true.`,
+					),
+				apply: async () => {
+					const saved =
+						existing?.path !== undefined
+							? await userPermissions.update(gtm, { path: existing.path }, proposed)
+							: await userPermissions.create(gtm, { parent: accountPath({ accountId }) }, proposed);
+					return okWrite(
+						{ action: existing ? "updated" : "added", userPermission: permissionRow(saved ?? proposed) },
+						{ note: USER_ACCESS_NOTE },
+					);
+				},
+			});
 		},
 	);
 
@@ -151,16 +157,19 @@ export const userTools: ToolGroup = (tools) => {
 			const existing = await findPermission(gtm, accountId, emailAddress);
 			if (!existing?.path)
 				return fail(`${emailAddress} has no access to account ${accountId}, so there is nothing to remove.`);
-			if (confirm !== true) {
-				return ok({
-					preview: true,
-					wouldRemove: permissionRow(existing),
-					...selfWarning(emailAddress, props.email),
-					message: `Nothing was changed. To remove ${emailAddress}, get the user's go-ahead, then call delete_user_permission again with confirm: true.`,
-				});
-			}
-			await userPermissions.delete(gtm, { path: existing.path });
-			return okWrite({ removed: { emailAddress } }, { note: USER_ACCESS_NOTE });
+			const { path } = existing;
+			return confirmGate({
+				confirm,
+				preview: () =>
+					okPreview(
+						{ wouldRemove: permissionRow(existing), ...selfWarning(emailAddress, props.email) },
+						`Nothing was changed. To remove ${emailAddress}, get the user's go-ahead, then call delete_user_permission again with confirm: true.`,
+					),
+				apply: async () => {
+					await userPermissions.delete(gtm, { path });
+					return okWrite({ removed: { emailAddress } }, { note: USER_ACCESS_NOTE });
+				},
+			});
 		},
 	);
 };

@@ -3,18 +3,10 @@ import { accounts, type Tag } from "../gtm/generated";
 import { createTag, updateTag } from "../gtm/merge";
 import { tagPath, workspacePath } from "../gtm/paths";
 import type { ToolGroup } from "../mcp/registry";
-import { fail, okEntity, okList } from "../mcp/result";
-import {
-	confirmInput,
-	fingerprintInput,
-	gtmId,
-	idList,
-	nameInput,
-	notesInput,
-	parametersInput,
-	workspaceInput,
-} from "./inputs";
-import { deleteWithConfirm, isEmptyPatch, okWrite } from "./write";
+import { fail } from "../mcp/result";
+import { addDeleteTool, addGetTool, addListTool, workspaceEntity } from "./entity";
+import { fingerprintInput, gtmId, idList, nameInput, notesInput, parametersInput, workspaceInput } from "./inputs";
+import { isEmptyPatch, okWrite } from "./write";
 
 const tags = accounts.containers.workspaces.tags;
 
@@ -59,34 +51,28 @@ const tagFields = z.object({
 
 const tagIdInput = { tagId: gtmId("Tag ID") };
 
-export const tagTools: ToolGroup = (tools) => {
-	tools.add(
-		"list_tags",
-		{
-			description:
-				"List the tags in a GTM workspace: ID, name, type, folder, firing and blocking trigger IDs, paused: true if paused (absent = active).",
-			input: workspaceInput,
-			annotations: { readOnlyHint: true },
-		},
-		async (ids, { gtm }) => {
-			const parent = workspacePath(ids);
-			const list = await gtm.listAll(
-				(pageToken) => tags.list(gtm, { parent, pageToken }),
-				(page) => page.tag,
-			);
-			return okList("tags", list, tagRow);
-		},
-	);
+const tag = workspaceEntity({
+	kind: "tag",
+	ids: workspaceInput.extend(tagIdInput),
+	id: (ids) => ids.tagId,
+	path: tagPath,
+	api: tags,
+	items: (page) => page.tag,
+	row: tagRow,
+});
 
-	tools.add(
-		"get_tag",
-		{
-			description: "Get one tag with all its parameters, triggers, consent settings and fingerprint.",
-			input: workspaceInput.extend(tagIdInput),
-			annotations: { readOnlyHint: true },
-		},
-		async (ids, { gtm }) => okEntity(await tags.get(gtm, { path: tagPath(ids) })),
-	);
+export const tagTools: ToolGroup = (tools) => {
+	addListTool(tools, tag, {
+		name: "list_tags",
+		key: "tags",
+		description:
+			"List the tags in a GTM workspace: ID, name, type, folder, firing and blocking trigger IDs, paused: true if paused (absent = active).",
+	});
+
+	addGetTool(tools, tag, {
+		name: "get_tag",
+		description: "Get one tag with all its parameters, triggers, consent settings and fingerprint.",
+	});
 
 	tools.add(
 		"create_tag",
@@ -121,23 +107,8 @@ export const tagTools: ToolGroup = (tools) => {
 		},
 	);
 
-	tools.add(
-		"delete_tag",
-		{
-			description: "Delete a tag from a workspace. Without confirm: true, only shows what would be deleted.",
-			input: workspaceInput.extend(tagIdInput).extend({ confirm: confirmInput("delete") }),
-			annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
-		},
-		async ({ confirm, ...ids }, { gtm }) => {
-			const path = tagPath(ids);
-			return deleteWithConfirm({
-				confirm,
-				kind: "tag",
-				id: ids.tagId,
-				get: () => tags.get(gtm, { path }),
-				summarize: tagRow,
-				remove: () => tags.delete(gtm, { path }),
-			});
-		},
-	);
+	addDeleteTool(tools, tag, {
+		name: "delete_tag",
+		description: "Delete a tag from a workspace. Without confirm: true, only shows what would be deleted.",
+	});
 };

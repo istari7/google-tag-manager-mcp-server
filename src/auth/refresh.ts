@@ -13,8 +13,17 @@ import { GoogleInvalidGrant, refreshGoogleToken } from "./google";
 /** Expire ours this long before Google's, so a refresh always lands while Google's is valid. */
 const SAFETY_MARGIN_S = 300;
 
+/** Used when ACCESS_TOKEN_TTL_SECONDS (wrangler.jsonc vars) is unset or not a number. */
+const DEFAULT_ACCESS_TOKEN_TTL_S = 3000;
+
+/** Our MCP access token lifetime from ACCESS_TOKEN_TTL_SECONDS: the one source for it. */
+export function configuredAccessTokenTtl(env: Env): number {
+	return Number(env.ACCESS_TOKEN_TTL_SECONDS) || DEFAULT_ACCESS_TOKEN_TTL_S;
+}
+
+/** The configured lifetime, cut short so ours expires before the Google token it carries. */
 export function accessTokenTtl(env: Env, googleExpiresAt: number): number {
-	const configured = Number(env.ACCESS_TOKEN_TTL_SECONDS) || 3000;
+	const configured = configuredAccessTokenTtl(env);
 	const googleRemaining = Math.floor((googleExpiresAt - Date.now()) / 1000) - SAFETY_MARGIN_S;
 	return Math.max(60, Math.min(configured, googleRemaining));
 }

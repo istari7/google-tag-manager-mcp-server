@@ -6,7 +6,9 @@
 //        tools.add("delete_tag", { description, input, annotations }, async (args, ctx) => ...);
 //      };
 //    A file may hold reads and writes; add new tools to the existing group for that entity.
-//    A new group needs one line in TOOL_GROUPS (src/tools/index.ts).
+//    A new group needs one line in TOOL_GROUPS (src/tools/index.ts). For a workspace entity,
+//    list_* / get_* / delete_* come from src/tools/entity.ts (see tags.ts); write create and
+//    update by hand, after reading GTM_API_QUIRKS.md.
 // 2. `input` is a zod object. Build it from src/tools/inputs.ts (`workspaceInput.extend({
 //    tagId: gtmId("Tag ID") })`) so IDs stay numeric strings. Use NO_INPUT for none.
 // 3. `annotations` must say `readOnlyHint: true` (reads) or give `destructiveHint`
@@ -18,22 +20,26 @@
 //    Build paths with src/gtm/paths.ts. Use `ctx.gtm.listAll()` for every list.
 // 5. Return ok() / okEntity() / okList() / fail() from src/mcp/result.ts. Throwing is fine:
 //    the registry turns any error into fail(error) with a model-friendly message.
-// 6. Writes append UNPUBLISHED_CHANGES_NOTE (src/gtm/quirks.ts, Q9). Deletes, and anything
-//    that changes the live site (publish_version), take `confirm: true` and return a preview
-//    without it. delete_container also wants the container's public ID typed back.
+// 6. Writes append UNPUBLISHED_CHANGES_NOTE (src/gtm/quirks.ts, Q9) via okWrite
+//    (src/tools/write.ts). Deletes, and anything that takes effect at once (publishing,
+//    account settings, user access), take `confirm: true` and return a preview without it:
+//    use confirmGate / okPreview / deleteWithConfirm from src/tools/confirm.ts.
+//    delete_container also wants the container's public ID typed back.
 // 7. Tests: test/tools/<group>.test.ts with the helpers in test/tools/helpers.ts (assert the
 //    outgoing request). Then `pnpm test -u` for the tools/list snapshot, and keep it < 40 KB.
 // ──────────────────────────────────────────────────────────────────────────────────────────
 
 import { McpServer } from "@modelcontextprotocol/server";
 import { createMcpHandler } from "agents/mcp";
+import { version } from "../../package.json";
 import type { Env, Props } from "../env";
 import { registerBestPractices } from "../resources/best-practices";
 import { TOOL_GROUPS } from "../tools";
 import { createToolContext, type ToolContext } from "./context";
 import { toolRegistry } from "./registry";
 
-export const SERVER_INFO = { name: "gtm-mcp", version: "0.0.1" } as const;
+/** The version is package.json's (bundled at build time: wrangler's esbuild inlines just that field). */
+export const SERVER_INFO = { name: "gtm-mcp", version } as const;
 
 export function buildServer(ctx: ToolContext): McpServer {
 	const server = new McpServer(SERVER_INFO);

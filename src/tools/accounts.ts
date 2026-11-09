@@ -6,6 +6,7 @@ import { updateAccount } from "../gtm/merge";
 import { accountPath, containerPath, isGtmId, isPublicContainerId } from "../gtm/paths";
 import type { ToolGroup } from "../mcp/registry";
 import { fail, ok, okEntity, okList } from "../mcp/result";
+import { confirmGate, okPreview } from "./confirm";
 import { accountInput, confirmInput, containerInput, fingerprintInput, NO_INPUT } from "./inputs";
 import { isEmptyPatch, okWrite } from "./write";
 
@@ -32,7 +33,6 @@ function listContainers(gtm: GtmClient, accountId: string) {
 	);
 }
 
-/** What a model needs to know about a container; drops `features`, fingerprint and UI links. */
 /** Account settings are not versioned: an update applies at once, with no workspace or publish step. */
 export const ACCOUNT_SETTINGS_NOTE =
 	"Account settings take effect immediately; they are not part of any workspace or version.";
@@ -47,6 +47,7 @@ function accountSummary(a: Account) {
 	};
 }
 
+/** What a model needs to know about a container; drops `features`, fingerprint and UI links. */
 function containerSummary(c: Container) {
 	return {
 		accountId: c.accountId,
@@ -215,22 +216,26 @@ export const accountTools: ToolGroup = (tools) => {
 			const path = containerPath(ids);
 			const container = await accounts.containers.get(gtm, { path });
 			const expected = container.publicId;
-			if (confirm !== true) {
-				return ok({
-					preview: true,
-					wouldDelete: { kind: "container", ...containerSummary(container) },
-					message: `Nothing was deleted. Deleting a container removes its workspaces and versions, and sites that load ${expected ?? "it"} stop getting its tags. Get the user's explicit go-ahead, then call delete_container again with confirm: true and publicId: "${expected ?? ""}".`,
-				});
-			}
-			if (!expected || publicId?.trim().toUpperCase() !== expected.toUpperCase()) {
-				return fail(
-					`Nothing was deleted: publicId must be "${expected ?? "?"}", the public ID of container ${ids.containerId}.`,
-				);
-			}
-			await accounts.containers.delete(gtm, { path });
-			return ok({
-				deleted: { kind: "container", containerId: ids.containerId, publicId: expected },
-				note: "The container is deleted. Remove its snippet from the sites that loaded it.",
+			return confirmGate({
+				confirm,
+				preview: () =>
+					okPreview(
+						{ wouldDelete: { kind: "container", ...containerSummary(container) } },
+						`Nothing was deleted. Deleting a container removes its workspaces and versions, and sites that load ${expected ?? "it"} stop getting its tags. Get the user's explicit go-ahead, then call delete_container again with confirm: true and publicId: "${expected ?? ""}".`,
+					),
+				apply: async () => {
+					// The public ID typed back (CLAUDE.md): proof the user means this container.
+					if (!expected || publicId?.trim().toUpperCase() !== expected.toUpperCase()) {
+						return fail(
+							`Nothing was deleted: publicId must be "${expected ?? "?"}", the public ID of container ${ids.containerId}.`,
+						);
+					}
+					await accounts.containers.delete(gtm, { path });
+					return ok({
+						deleted: { kind: "container", containerId: ids.containerId, publicId: expected },
+						note: "The container is deleted. Remove its snippet from the sites that loaded it.",
+					});
+				},
 			});
 		},
 	);

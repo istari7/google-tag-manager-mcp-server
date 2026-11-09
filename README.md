@@ -61,7 +61,10 @@ MCP client ──OAuth──▶ your Worker (/authorize, /token, /mcp) ──▶
 on your website changes until a version is published. *admin* changes account settings or user
 access, which apply immediately. *destructive* deletes something, changes who has access, or
 publishes a version, and needs `confirm: true` (without it, the tool returns a preview of what it
-would do). `publish_version` is the only tool that changes your live site.
+would do). Workspace edits reach your site only when a version is published, but some tools act
+the moment they are confirmed: `publish_version` and `delete_container` change what your sites
+load, and `update_account`, `set_user_permission` and `delete_user_permission` change account
+settings or access, which are not versioned.
 
 | Group | Tool | What it does | Kind |
 |---|---|---|---|

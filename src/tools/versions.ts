@@ -7,16 +7,14 @@ import { containerPath, parseGtmPath, versionPath, workspacePath } from "../gtm/
 import { createVersionProblem } from "../gtm/quirks";
 import type { ToolGroup } from "../mcp/registry";
 import { fail, ok, okList } from "../mcp/result";
+import { confirmGate, okPreview } from "./confirm";
 import { confirmInput, containerInput, gtmId, nameInput, workspaceInput } from "./inputs";
-import { describeEntity, summarizeVersion, versionHeadline } from "./summaries";
+import { count, describeEntity, summarizeVersion, versionHeadline } from "./summaries";
 import { okWrite } from "./write";
 
 const versions = accounts.containers.versions;
 const versionHeaders = accounts.containers.versionHeaders;
 const workspaces = accounts.containers.workspaces;
-
-/** Google omits a count when it is zero; report 0, as get_live_version does. */
-const count = (value: string | undefined) => (value === undefined ? 0 : Number(value));
 
 function versionRow(h: ContainerVersionHeader) {
 	return {
@@ -111,30 +109,38 @@ export const versionTools: ToolGroup = (tools) => {
 		},
 		async ({ containerVersionId, confirm, ...ids }, { gtm }): Promise<CallToolResult> => {
 			const path = versionPath({ ...ids, versionId: containerVersionId });
-			if (confirm !== true) {
-				const [version, live] = await Promise.all([versions.get(gtm, { path }), liveVersion(gtm, containerPath(ids))]);
-				if (version.deleted) return fail(`Version ${containerVersionId} is deleted, so it cannot be published.`);
-				const alreadyLive = live?.containerVersionId === containerVersionId;
-				return ok({
-					preview: true,
-					wouldPublish: summarizeVersion(version) ?? {},
-					currentlyLive: live
-						? { containerVersionId: live.containerVersionId, name: live.name }
-						: "nothing (this container has never been published)",
-					...(alreadyLive ? { alreadyLive: true } : {}),
-					message:
+			return confirmGate({
+				confirm,
+				preview: async () => {
+					const [version, live] = await Promise.all([
+						versions.get(gtm, { path }),
+						liveVersion(gtm, containerPath(ids)),
+					]);
+					if (version.deleted) return fail(`Version ${containerVersionId} is deleted, so it cannot be published.`);
+					const alreadyLive = live?.containerVersionId === containerVersionId;
+					return okPreview(
+						{
+							wouldPublish: summarizeVersion(version) ?? {},
+							currentlyLive: live
+								? { containerVersionId: live.containerVersionId, name: live.name }
+								: "nothing (this container has never been published)",
+							...(alreadyLive ? { alreadyLive: true } : {}),
+						},
 						"Nothing was published. Show the user what this version contains and what is live now, get their explicit go-ahead, then call publish_version again with confirm: true.",
-				});
-			}
-			const response = await versions.publish(gtm, { path });
-			if (response?.compilerError) {
-				return fail(
-					`Version ${containerVersionId} does not compile, so nothing was published. Fix the errors in GTM, then create and publish a new version.`,
-				);
-			}
-			return ok({
-				published: versionHeadline(response?.containerVersion ?? { containerVersionId }),
-				note: `Version ${containerVersionId} is now LIVE on every site that loads this container. To roll back, publish an earlier version (list_versions).`,
+					);
+				},
+				apply: async () => {
+					const response = await versions.publish(gtm, { path });
+					if (response?.compilerError) {
+						return fail(
+							`Version ${containerVersionId} does not compile, so nothing was published. Fix the errors in GTM, then create and publish a new version.`,
+						);
+					}
+					return ok({
+						published: versionHeadline(response?.containerVersion ?? { containerVersionId }),
+						note: `Version ${containerVersionId} is now LIVE on every site that loads this container. To roll back, publish an earlier version (list_versions).`,
+					});
+				},
 			});
 		},
 	);

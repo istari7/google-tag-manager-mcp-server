@@ -3,17 +3,10 @@ import { accounts, type Variable } from "../gtm/generated";
 import { createVariable, updateVariable } from "../gtm/merge";
 import { variablePath, workspacePath } from "../gtm/paths";
 import type { ToolGroup } from "../mcp/registry";
-import { fail, okEntity, okList } from "../mcp/result";
-import {
-	confirmInput,
-	fingerprintInput,
-	gtmId,
-	nameInput,
-	notesInput,
-	parametersInput,
-	workspaceInput,
-} from "./inputs";
-import { deleteWithConfirm, isEmptyPatch, okWrite } from "./write";
+import { fail } from "../mcp/result";
+import { addDeleteTool, addGetTool, addListTool, workspaceEntity } from "./entity";
+import { fingerprintInput, gtmId, nameInput, notesInput, parametersInput, workspaceInput } from "./inputs";
+import { isEmptyPatch, okWrite } from "./write";
 
 const variables = accounts.containers.workspaces.variables;
 
@@ -36,34 +29,28 @@ const variableFields = z.object({
 
 const variableIdInput = { variableId: gtmId("Variable ID") };
 
-export const variableTools: ToolGroup = (tools) => {
-	tools.add(
-		"list_variables",
-		{
-			description:
-				"List the user-defined variables in a GTM workspace: ID, name, type and folder. Built-ins: list_built_in_variables.",
-			input: workspaceInput,
-			annotations: { readOnlyHint: true },
-		},
-		async (ids, { gtm }) => {
-			const parent = workspacePath(ids);
-			const list = await gtm.listAll(
-				(pageToken) => variables.list(gtm, { parent, pageToken }),
-				(page) => page.variable,
-			);
-			return okList("variables", list, variableRow);
-		},
-	);
+const variable = workspaceEntity({
+	kind: "variable",
+	ids: workspaceInput.extend(variableIdInput),
+	id: (ids) => ids.variableId,
+	path: variablePath,
+	api: variables,
+	items: (page) => page.variable,
+	row: variableRow,
+});
 
-	tools.add(
-		"get_variable",
-		{
-			description: "Get one user-defined variable with all its parameters and fingerprint.",
-			input: workspaceInput.extend(variableIdInput),
-			annotations: { readOnlyHint: true },
-		},
-		async (ids, { gtm }) => okEntity(await variables.get(gtm, { path: variablePath(ids) })),
-	);
+export const variableTools: ToolGroup = (tools) => {
+	addListTool(tools, variable, {
+		name: "list_variables",
+		key: "variables",
+		description:
+			"List the user-defined variables in a GTM workspace: ID, name, type and folder. Built-ins: list_built_in_variables.",
+	});
+
+	addGetTool(tools, variable, {
+		name: "get_variable",
+		description: "Get one user-defined variable with all its parameters and fingerprint.",
+	});
 
 	tools.add(
 		"create_variable",
@@ -99,23 +86,8 @@ export const variableTools: ToolGroup = (tools) => {
 		},
 	);
 
-	tools.add(
-		"delete_variable",
-		{
-			description: "Delete a variable from a workspace. Without confirm: true, only shows what would be deleted.",
-			input: workspaceInput.extend(variableIdInput).extend({ confirm: confirmInput("delete") }),
-			annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
-		},
-		async ({ confirm, ...ids }, { gtm }) => {
-			const path = variablePath(ids);
-			return deleteWithConfirm({
-				confirm,
-				kind: "variable",
-				id: ids.variableId,
-				get: () => variables.get(gtm, { path }),
-				summarize: variableRow,
-				remove: () => variables.delete(gtm, { path }),
-			});
-		},
-	);
+	addDeleteTool(tools, variable, {
+		name: "delete_variable",
+		description: "Delete a variable from a workspace. Without confirm: true, only shows what would be deleted.",
+	});
 };

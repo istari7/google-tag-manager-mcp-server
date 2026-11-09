@@ -4,6 +4,7 @@
     "lib": ["es2023"],
     "module": "es2022",
     "moduleResolution": "bundler",
+    "resolveJsonModule": true,
     "types": ["./worker-configuration.d.ts", "node", "@cloudflare/vitest-plugin/types"],
     "strict": true,
     "noUncheckedIndexedAccess": true,

@@ -6,8 +6,8 @@
 // Runs on plain Node 24 (native type stripping) against the real buildServer() from
 // src/mcp/server.ts. The source is written for the Workers bundler, so a few module hooks
 // bridge the gap: extensionless relative imports resolve to .ts, *.md loads as a text
-// module (like the `rules` in wrangler.jsonc), and `agents/mcp` (the Workers HTTP handler,
-// unused here) is stubbed. Nothing calls Google.
+// module (like the `rules` in wrangler.jsonc), package.json gets its named `version` export,
+// and `agents/mcp` (the Workers HTTP handler, unused here) is stubbed. Nothing calls Google.
 
 import { existsSync, readFileSync } from "node:fs";
 import { registerHooks } from "node:module";
@@ -34,6 +34,13 @@ registerHooks({
 		if (url.startsWith("file:") && url.endsWith(".md")) {
 			const text = readFileSync(new URL(url), "utf8");
 			return { format: "module", source: `export default ${JSON.stringify(text)};`, shortCircuit: true };
+		}
+		// src/mcp/server.ts imports `{ version }` from package.json, a named JSON import that
+		// bundlers allow and Node does not.
+		if (url.startsWith("file:") && url.endsWith("/package.json")) {
+			const data = JSON.parse(readFileSync(new URL(url), "utf8")) as { version?: string };
+			const source = `export const version = ${JSON.stringify(data.version)}; export default ${JSON.stringify(data)};`;
+			return { format: "module", source, shortCircuit: true };
 		}
 		return nextLoad(url, context);
 	},

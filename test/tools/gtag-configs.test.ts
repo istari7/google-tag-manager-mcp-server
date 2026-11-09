@@ -51,9 +51,9 @@ describe("delete_gtag_config", () => {
 		expect(writes(mock.gtm())).toHaveLength(0);
 		expect(result.json()).toEqual({
 			preview: true,
-			wouldDelete: { kind: "gtag_config", gtagConfigId: "27", type: "googtag", parameter: config.parameter },
+			wouldDelete: { kind: "gtagConfig", gtagConfigId: "27", type: "googtag", parameter: config.parameter },
 			message:
-				"Nothing was deleted. To delete this gtag_config, get the user's go-ahead, then call delete_gtag_config again with confirm: true.",
+				"Nothing was deleted. To delete this Google tag config, get the user's go-ahead, then call delete_gtag_config again with confirm: true.",
 		});
 	});
 
@@ -61,6 +61,6 @@ describe("delete_gtag_config", () => {
 		const mock = mockGtm({ [CONFIG]: byMethod({ DELETE: empty }) });
 		const result = await callTool("delete_gtag_config", { ...WORKSPACE_ARGS, gtagConfigId: "27", confirm: true });
 		expect(mock.gtm().map(describeCall)).toMatchObject([{ method: "DELETE", path: CONFIG, body: undefined }]);
-		expect(result.json()).toEqual({ deleted: { kind: "gtag_config", id: "27" }, note: UNPUBLISHED_CHANGES_NOTE });
+		expect(result.json()).toEqual({ deleted: { kind: "gtagConfig", id: "27" }, note: UNPUBLISHED_CHANGES_NOTE });
 	});
 });

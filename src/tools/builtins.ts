@@ -3,6 +3,7 @@ import { accounts, type BuiltInVariable } from "../gtm/generated";
 import { builtInVariablesPath, workspacePath } from "../gtm/paths";
 import type { ToolGroup } from "../mcp/registry";
 import { ok, okList } from "../mcp/result";
+import { confirmGate, okPreview } from "./confirm";
 import { confirmInput, workspaceInput } from "./inputs";
 import { okWrite } from "./write";
 
@@ -222,17 +223,18 @@ export const builtInTools: ToolGroup = (tools) => {
 				return ok({ notEnabled, message: "Nothing to disable: none of these built-ins is enabled." });
 			}
 			const rows = toDisable.map((type) => ({ type, name: enabled.get(type) }));
-			if (confirm !== true) {
-				return ok({
-					preview: true,
-					wouldDisable: rows,
-					...(notEnabled.length ? { notEnabled } : {}),
-					message:
+			return confirmGate({
+				confirm,
+				preview: () =>
+					okPreview(
+						{ wouldDisable: rows, ...(notEnabled.length ? { notEnabled } : {}) },
 						"Nothing was changed. Check nothing still uses these variables, get the user's go-ahead, then call disable_built_in_variables again with confirm: true.",
-				});
-			}
-			await builtIns.delete(gtm, { path: builtInVariablesPath(ids), type: toDisable });
-			return okWrite({ disabled: rows, notEnabled });
+					),
+				apply: async () => {
+					await builtIns.delete(gtm, { path: builtInVariablesPath(ids), type: toDisable });
+					return okWrite({ disabled: rows, notEnabled });
+				},
+			});
 		},
 	);
 };

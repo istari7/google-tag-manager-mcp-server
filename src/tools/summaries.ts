@@ -46,7 +46,14 @@ export function summarizeWorkspaceStatus(status: GetWorkspaceStatusResponse | un
 	};
 }
 
-const count = (list: readonly unknown[] | undefined) => list?.length ?? 0;
+/**
+ * How many: a list's length, or one of Google's string counts (`numTags: "3"` on version
+ * headers). Google omits both when the count is zero, so undefined is 0.
+ */
+export function count(value: readonly unknown[] | string | undefined): number {
+	if (value === undefined) return 0;
+	return typeof value === "string" ? Number(value) : value.length;
+}
 
 /** Tag/trigger/variable counts, plus any other entity kind the version has. */
 export function versionCounts(v: ContainerVersion) {

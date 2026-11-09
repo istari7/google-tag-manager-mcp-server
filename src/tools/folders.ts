@@ -3,8 +3,9 @@ import { accounts } from "../gtm/generated";
 import { folderPath, workspacePath } from "../gtm/paths";
 import type { ToolGroup } from "../mcp/registry";
 import { fail, okList } from "../mcp/result";
+import { deleteWithConfirm } from "./confirm";
 import { confirmInput, gtmId, idList, nameInput, notesInput, workspaceInput } from "./inputs";
-import { deleteWithConfirm, okWrite } from "./write";
+import { okWrite } from "./write";
 
 const folders = accounts.containers.workspaces.folders;
 
@@ -99,6 +100,7 @@ export const folderTools: ToolGroup = (tools) => {
 			const path = folderPath(ids);
 			return deleteWithConfirm({
 				confirm,
+				toolName: "delete_folder",
 				kind: "folder",
 				id: ids.folderId,
 				get: () => folders.get(gtm, { path }),

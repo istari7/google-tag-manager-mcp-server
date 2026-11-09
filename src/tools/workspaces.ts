@@ -3,9 +3,10 @@ import { accounts, type QuickPreviewResponse } from "../gtm/generated";
 import { containerPath, workspacePath } from "../gtm/paths";
 import type { ToolGroup } from "../mcp/registry";
 import { fail, ok, okList } from "../mcp/result";
+import { deleteWithConfirm } from "./confirm";
 import { confirmInput, containerInput, nameInput, workspaceInput } from "./inputs";
 import { summarizeWorkspaceStatus, versionCounts, WORKSPACE_NOT_LIVE_NOTE } from "./summaries";
-import { deleteWithConfirm, okWrite } from "./write";
+import { okWrite } from "./write";
 
 const workspaces = accounts.containers.workspaces;
 
@@ -105,6 +106,7 @@ export const workspaceTools: ToolGroup = (tools) => {
 			const path = workspacePath(ids);
 			return deleteWithConfirm({
 				confirm,
+				toolName: "delete_workspace",
 				kind: "workspace",
 				id: ids.workspaceId,
 				get: () => workspaces.get(gtm, { path }),
