@@ -27,16 +27,63 @@ export const FAKE_GOOGLE_TOKEN = fakeProps().googleAccessToken;
 
 let nextId = 1;
 
-/** One JSON-RPC call to /mcp as an already signed-in user. */
-export async function rpc(method: string, params: unknown = {}, props: Props = fakeProps()) {
+/** Raw /mcp response for one JSON-RPC call, with GTM_TOOL_GROUPS set to `toolGroups`. */
+export function rawRpc(method: string, params: unknown, props: Props, toolGroups: string): Promise<Response> {
 	const request = new Request(`${ORIGIN}/mcp`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" },
 		body: JSON.stringify({ jsonrpc: "2.0", id: nextId++, method, params }),
 	});
-	const res = await handleMcp(request, env, createExecutionContext(), props);
+	return handleMcp(request, { ...env, GTM_TOOL_GROUPS: toolGroups }, createExecutionContext(), props);
+}
+
+/**
+ * One JSON-RPC call to /mcp as an already signed-in user. Every tool group is on, so tool
+ * tests don't depend on which groups are default (test/tool-groups.test.ts covers that).
+ */
+export async function rpc(method: string, params: unknown = {}, props: Props = fakeProps(), toolGroups = "all") {
+	const res = await rawRpc(method, params, props, toolGroups);
 	expect(res.status).toBe(200);
 	return mcpResult(res);
+}
+
+/** The MCP protocol revision whose requests carry their own `_meta` envelope (multi round-trip). */
+export const MODERN_PROTOCOL = "2026-07-28";
+
+/**
+ * One tools/call as a 2026-07-28 client sends it: per-request `_meta` envelope (with these
+ * client capabilities) and the MCP-Protocol-Version / Mcp-Method / Mcp-Name headers. Pass
+ * `inputResponses` to retry after an input_required result. Returns the JSON-RPC message.
+ */
+export async function modernToolCall(
+	name: string,
+	args: Record<string, unknown>,
+	options: { capabilities?: Record<string, unknown>; inputResponses?: Record<string, unknown> } = {},
+): Promise<{ result?: Record<string, unknown>; error?: unknown }> {
+	const params = {
+		name,
+		arguments: args,
+		_meta: {
+			"io.modelcontextprotocol/protocolVersion": MODERN_PROTOCOL,
+			"io.modelcontextprotocol/clientInfo": { name: "test", version: "0" },
+			"io.modelcontextprotocol/clientCapabilities": options.capabilities ?? {},
+		},
+		...(options.inputResponses ? { inputResponses: options.inputResponses } : {}),
+	};
+	const request = new Request(`${ORIGIN}/mcp`, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+			Accept: "application/json, text/event-stream",
+			"MCP-Protocol-Version": MODERN_PROTOCOL,
+			"Mcp-Method": "tools/call",
+			"Mcp-Name": name,
+		},
+		body: JSON.stringify({ jsonrpc: "2.0", id: nextId++, method: "tools/call", params }),
+	});
+	const res = await handleMcp(request, { ...env, GTM_TOOL_GROUPS: "all" }, createExecutionContext(), fakeProps());
+	expect(res.status).toBe(200);
+	return (await mcpResult(res)) as { result?: Record<string, unknown>; error?: unknown };
 }
 
 export interface ToolCallResult {

@@ -7,18 +7,16 @@ import { containerPath, parseGtmPath, versionPath, workspacePath } from "../gtm/
 import { createVersionProblem } from "../gtm/quirks";
 import type { ToolGroup } from "../mcp/registry";
 import { fail, ok, okList } from "../mcp/result";
+import { confirmGate, okPreview } from "./confirm";
 import { confirmInput, containerInput, gtmId, nameInput, workspaceInput } from "./inputs";
-import { describeEntity, summarizeVersion, versionHeadline } from "./summaries";
+import { count, describeEntity, resolveConflictsIn, summarizeVersion, versionHeadline } from "./summaries";
 import { okWrite } from "./write";
 
 const versions = accounts.containers.versions;
 const versionHeaders = accounts.containers.versionHeaders;
 const workspaces = accounts.containers.workspaces;
 
-/** Google omits a count when it is zero; report 0, as get_live_version does. */
-const count = (value: string | undefined) => (value === undefined ? 0 : Number(value));
-
-function versionRow(h: ContainerVersionHeader) {
+export function versionRow(h: ContainerVersionHeader) {
 	return {
 		containerVersionId: h.containerVersionId,
 		name: h.name,
@@ -30,7 +28,7 @@ function versionRow(h: ContainerVersionHeader) {
 }
 
 /** The live version, or undefined when nothing has been published yet (404). */
-async function liveVersion(gtm: GtmClient, parent: string): Promise<ContainerVersion | undefined> {
+export async function liveVersion(gtm: GtmClient, parent: string): Promise<ContainerVersion | undefined> {
 	try {
 		return await versions.live(gtm, { parent });
 	} catch (error) {
@@ -51,14 +49,14 @@ export const versionTools: ToolGroup = (tools) => {
 		"create_version",
 		{
 			description:
-				"Save a workspace's changes as a new container version. Does not publish (see publish_version). Fails if the workspace has no changes or has merge conflicts.",
+				"Save a workspace's changes as a new container version; does not publish. Fails if there are no changes or merge conflicts.",
 			input: workspaceInput.extend({
 				name: nameInput("Version").describe("Version name: what changed, e.g. Add GA4 purchase event"),
 				notes: z.string().optional().describe("Version notes: what changed and why"),
 			}),
 			annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 		},
-		async ({ name, notes, ...ids }, { gtm }): Promise<CallToolResult> => {
+		async ({ name, notes, ...ids }, { gtm, env }): Promise<CallToolResult> => {
 			const path = workspacePath(ids);
 			// Check the workspace first, so we never version nothing or a conflicted workspace.
 			const status = await workspaces.getStatus(gtm, { path });
@@ -66,7 +64,7 @@ export const versionTools: ToolGroup = (tools) => {
 			if (conflicts.length > 0) {
 				const which = conflicts.map((c) => entityLabel(describeEntity(c.entityInWorkspace ?? c.entityInBaseVersion)));
 				return fail(
-					`Workspace ${ids.workspaceId} has ${conflicts.length} merge conflict(s) (${which.join(", ")}). Resolve them in the GTM UI, then retry. No version was created.`,
+					`Workspace ${ids.workspaceId} has ${conflicts.length} merge conflict(s) (${which.join(", ")}). Resolve them ${resolveConflictsIn(env.GTM_TOOL_GROUPS, true)}, then retry. No version was created.`,
 				);
 			}
 			if ((status?.workspaceChange ?? []).length === 0) {
@@ -74,7 +72,7 @@ export const versionTools: ToolGroup = (tools) => {
 			}
 
 			const response = await workspaces.createVersion(gtm, { path }, { name, notes });
-			const problem = createVersionProblem(response); // Q20
+			const problem = createVersionProblem(response, resolveConflictsIn(env.GTM_TOOL_GROUPS, false)); // Q20
 			if (problem || !response.containerVersion) return fail(problem ?? "No version was created.");
 
 			const version = versionHeadline(response.containerVersion);
@@ -111,30 +109,45 @@ export const versionTools: ToolGroup = (tools) => {
 		},
 		async ({ containerVersionId, confirm, ...ids }, { gtm }): Promise<CallToolResult> => {
 			const path = versionPath({ ...ids, versionId: containerVersionId });
-			if (confirm !== true) {
-				const [version, live] = await Promise.all([versions.get(gtm, { path }), liveVersion(gtm, containerPath(ids))]);
-				if (version.deleted) return fail(`Version ${containerVersionId} is deleted, so it cannot be published.`);
-				const alreadyLive = live?.containerVersionId === containerVersionId;
-				return ok({
-					preview: true,
-					wouldPublish: summarizeVersion(version) ?? {},
-					currentlyLive: live
-						? { containerVersionId: live.containerVersionId, name: live.name }
-						: "nothing (this container has never been published)",
-					...(alreadyLive ? { alreadyLive: true } : {}),
-					message:
+			return confirmGate({
+				confirm,
+				preview: async () => {
+					const [version, live] = await Promise.all([
+						versions.get(gtm, { path }),
+						liveVersion(gtm, containerPath(ids)),
+					]);
+					if (version.deleted) return fail(`Version ${containerVersionId} is deleted, so it cannot be published.`);
+					const alreadyLive = live?.containerVersionId === containerVersionId;
+					// Every tag with its paused state spelled out: an active tag fires once published.
+					const tags = version.tag?.map((t) => ({
+						tagId: t.tagId,
+						name: t.name,
+						type: t.type,
+						paused: t.paused === true,
+					}));
+					return okPreview(
+						{
+							wouldPublish: { ...summarizeVersion(version), ...(tags ? { tags } : {}) },
+							currentlyLive: live
+								? { containerVersionId: live.containerVersionId, name: live.name }
+								: "nothing (this container has never been published)",
+							...(alreadyLive ? { alreadyLive: true } : {}),
+						},
 						"Nothing was published. Show the user what this version contains and what is live now, get their explicit go-ahead, then call publish_version again with confirm: true.",
-				});
-			}
-			const response = await versions.publish(gtm, { path });
-			if (response?.compilerError) {
-				return fail(
-					`Version ${containerVersionId} does not compile, so nothing was published. Fix the errors in GTM, then create and publish a new version.`,
-				);
-			}
-			return ok({
-				published: versionHeadline(response?.containerVersion ?? { containerVersionId }),
-				note: `Version ${containerVersionId} is now LIVE on every site that loads this container. To roll back, publish an earlier version (list_versions).`,
+					);
+				},
+				apply: async () => {
+					const response = await versions.publish(gtm, { path });
+					if (response?.compilerError) {
+						return fail(
+							`Version ${containerVersionId} does not compile, so nothing was published. Fix the errors in GTM, then create and publish a new version.`,
+						);
+					}
+					return ok({
+						published: versionHeadline(response?.containerVersion ?? { containerVersionId }),
+						note: `Version ${containerVersionId} is now LIVE on every site that loads this container. To roll back, publish an earlier version (list_versions).`,
+					});
+				},
 			});
 		},
 	);
@@ -143,7 +156,7 @@ export const versionTools: ToolGroup = (tools) => {
 		"get_live_version",
 		{
 			description:
-				"Summarise the published (live) version of a container: version ID, entity counts, and the name and type of every tag, trigger and variable.",
+				"Summarise a container's live version: version ID, counts, and every tag, trigger and variable's name and type.",
 			input: containerInput,
 			annotations: { readOnlyHint: true },
 		},
@@ -158,7 +171,8 @@ export const versionTools: ToolGroup = (tools) => {
 	tools.add(
 		"list_versions",
 		{
-			description: "List a container's saved versions, newest first, with tag/trigger/variable counts.",
+			description:
+				"List a container's saved versions, newest first, with tag/trigger/variable counts. The published one has live: true.",
 			input: containerInput.extend({
 				includeDeleted: z.boolean().optional().describe("Also list deleted versions"),
 			}),
@@ -170,10 +184,16 @@ export const versionTools: ToolGroup = (tools) => {
 				(pageToken) => versionHeaders.list(gtm, { parent, pageToken, includeDeleted }),
 				(page) => page.containerVersionHeader,
 			);
+			// Version headers don't say which one is live, so ask (after the list, so a bad ID
+			// fails on the first call). undefined when nothing was ever published.
+			const liveId = (await liveVersion(gtm, parent))?.containerVersionId;
 			const items = [...list.items].sort(
 				(a, b) => Number(b.containerVersionId ?? 0) - Number(a.containerVersionId ?? 0),
 			);
-			return okList("versions", { ...list, items }, versionRow);
+			return okList("versions", { ...list, items }, (h) => ({
+				...versionRow(h),
+				live: (liveId !== undefined && h.containerVersionId === liveId) || undefined,
+			}));
 		},
 	);
 };

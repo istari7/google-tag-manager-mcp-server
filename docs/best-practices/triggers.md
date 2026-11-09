@@ -1,3 +1,9 @@
+---
+title: "Triggers"
+description: "Choosing a trigger type and writing its conditions correctly (filter vs autoEventFilter, negate)."
+order: 40
+---
+
 # Triggers
 
 ## Choosing the type

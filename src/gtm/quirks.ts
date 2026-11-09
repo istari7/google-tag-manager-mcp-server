@@ -251,12 +251,16 @@ export function normalizeTag(input: TagInput, current?: Tag): Normalized<Partial
  * containerVersion (nothing to version), a compiler error, or a merge
  * conflict. Returns a model-friendly reason, or undefined when a version was made.
  */
-export function createVersionProblem(response: CreateContainerVersionResponse | undefined): string | undefined {
+export function createVersionProblem(
+	response: CreateContainerVersionResponse | undefined,
+	/** Where to resolve conflicts, e.g. "in the GTM UI" (resolveConflictsIn in src/tools/summaries.ts). */
+	resolveIn = "in the GTM UI",
+): string | undefined {
 	if (response?.compilerError) {
 		return "GTM could not compile the workspace, so no version was created. Fix the workspace errors in GTM and retry.";
 	}
 	if (response?.syncStatus?.mergeConflict) {
-		return "The workspace has merge conflicts with the latest version. Resolve them in GTM, then retry.";
+		return `The workspace has merge conflicts with the latest version, even if get_workspace_status shows none before a sync. Resolve them ${resolveIn}, then retry.`;
 	}
 	if (response?.syncStatus?.syncError) {
 		return "GTM could not sync the workspace with the latest version. Retry, or sync it in GTM first.";

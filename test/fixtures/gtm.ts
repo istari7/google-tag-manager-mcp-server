@@ -198,6 +198,15 @@ export const errors = {
 			status: "INVALID_ARGUMENT",
 		},
 	},
+	/** Q25/Q26: what GTM says when deleting a non-empty folder or a trigger/variable still in use. */
+	stillInUse400: {
+		error: {
+			code: 400,
+			message: "Returned an error response for your request.",
+			errors: [{ message: "Returned an error response for your request.", domain: "global", reason: "badRequest" }],
+			status: "INVALID_ARGUMENT",
+		},
+	},
 	tooMany429: {
 		error: {
 			code: 429,

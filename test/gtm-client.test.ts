@@ -9,8 +9,9 @@ import {
 	listAll,
 	MAX_RETRIES,
 	resolveApiUrl,
+	withoutRetries,
 } from "../src/gtm/client";
-import { GtmApiError, MESSAGES, toGtmApiError } from "../src/gtm/errors";
+import { GtmApiError, MESSAGES, notFoundHint, toGtmApiError } from "../src/gtm/errors";
 import { accounts, methods, type Tag } from "../src/gtm/generated";
 import {
 	accountPath,
@@ -222,10 +223,57 @@ describe("error mapping", () => {
 
 	it("404 → not found with the path; generic 'Not Found' is dropped", () => {
 		const e = map(404, errors.notFound404, `${TAG_PATH}?fingerprint=1`);
-		expect(e.message).toBe(`Not found: ${TAG_PATH}. Check the account/container/workspace IDs.`);
+		expect(e.message).toBe(`Not found: ${TAG_PATH}. Check the tag ID, then the account/container/workspace IDs.`);
 	});
 
-	it("409 and 412 → changed by someone else", () => {
+	it.each([
+		["accounts/1", "Check the account ID."],
+		["accounts/1/containers/2/versions/999", "Check the version ID, then the account/container IDs."],
+		["accounts/1/containers/2/versions/999:publish", "Check the version ID, then the account/container IDs."],
+		[
+			"accounts/1/containers/2/workspaces/3/folders/4",
+			"Check the folder ID, then the account/container/workspace IDs.",
+		],
+		[
+			"accounts/1/containers/2/workspaces/3/gtag_config/4",
+			"Check the Google tag config ID, then the account/container/workspace IDs.",
+		],
+		["accounts/1/user_permissions/5", "Check the user permission ID, then the account ID."],
+		["accounts/containers:lookup", "Check the IDs in this path."],
+	])("404 on %s names the IDs in that path", (path, hint) => {
+		expect(notFoundHint(path)).toBe(hint);
+		expect(map(404, errors.notFound404, path).message).toBe(`Not found: ${path}. ${hint}`);
+	});
+
+	it("Q38 a zone 404 adds that zones need GTM 360 (Google answers 404 on standard accounts)", () => {
+		const path = "accounts/1/containers/2/workspaces/3/zones";
+		const e = map(404, { error: { code: 404, message: "Not found or permission denied." } }, path);
+		expect(e.message).toBe(
+			`Not found: ${path}. Check the workspace ID, then the account/container IDs. Google says: Not found or permission denied. Zones exist only in GTM 360 accounts: on a standard account Google answers 404 here even when every ID is right.`,
+		);
+	});
+
+	it("Q38 a user-permission 404 'User not found' says the email has no Google account, not that an ID is wrong", () => {
+		const path = "accounts/1/user_permissions";
+		const e = map(404, { error: { code: 404, message: "User not found" } }, path);
+		expect(e.kind).toBe("notFound");
+		expect(e.message).toContain("no Google account for that email address");
+		expect(e.message).not.toContain("Check the account ID");
+	});
+
+	it("Q31 a 429 shows Google's text when it says more than rate limit", () => {
+		const e = map(429, { error: { code: 429, message: "A Google tag config of this type already exists." } });
+		expect(e.message).toBe(`${MESSAGES.rateLimit} Google says: A Google tag config of this type already exists.`);
+	});
+
+	it("Q31 withoutRetries sends a 429 once", async () => {
+		const { client, calls } = testClient([json(429, errors.tooMany429)]);
+		const error = await caught(ws.gtagConfig.create(withoutRetries(client), { parent: WORKSPACE }, { type: "x" }));
+		expect(error.status).toBe(429);
+		expect(calls).toHaveLength(1);
+	});
+
+	it("409 and 412 → changed since it was read", () => {
 		expect(map(409, errors.fingerprint409).message).toBe(MESSAGES.conflict);
 		expect(map(412, errors.precondition412).message).toBe(MESSAGES.conflict);
 	});

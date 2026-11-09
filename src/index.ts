@@ -1,7 +1,7 @@
 import OAuthProvider from "@cloudflare/workers-oauth-provider";
 import { authHandler } from "./auth/handler";
 import { limitBody, rateLimit } from "./auth/limits";
-import { tokenExchangeCallback } from "./auth/refresh";
+import { configuredAccessTokenTtl, tokenExchangeCallback } from "./auth/refresh";
 import type { Env } from "./env";
 import { mcpApiHandler } from "./mcp/server";
 
@@ -10,7 +10,7 @@ import { mcpApiHandler } from "./mcp/server";
 // custom domain and on `wrangler dev`.
 const providers = new Map<string, OAuthProvider<Env>>();
 
-function providerFor(origin: string): OAuthProvider<Env> {
+function providerFor(origin: string, env: Env): OAuthProvider<Env> {
 	let provider = providers.get(origin);
 	if (!provider) {
 		provider = new OAuthProvider<Env>({
@@ -27,8 +27,8 @@ function providerFor(origin: string): OAuthProvider<Env> {
 				authorization_servers: [origin],
 			},
 			tokenExchangeCallback,
-			// Our token lifetime is set per token in tokenExchangeCallback (≤ Google's).
-			accessTokenTTL: 3000,
+			// The default lifetime. tokenExchangeCallback sets each token's own, capped at Google's.
+			accessTokenTTL: configuredAccessTokenTtl(env),
 			// A grant lives 30 days, but slides while in use.
 			refreshTokenTTL: 30 * 86400,
 			refreshTokenIdleTTL: 30 * 86400,
@@ -46,6 +46,6 @@ export default {
 		if (limited) return limited;
 		const checked = await limitBody(request, url.pathname);
 		if (checked instanceof Response) return checked;
-		return providerFor(url.origin).fetch(checked, env, ctx);
+		return providerFor(url.origin, env).fetch(checked, env, ctx);
 	},
 } satisfies ExportedHandler<Env>;

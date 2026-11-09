@@ -1,3 +1,9 @@
+---
+title: "Tags"
+description: "Google tag and GA4 event tags, firing options, custom HTML, paused tags and double counting."
+order: 30
+---
+
 # Tags
 
 ## Google tag and GA4

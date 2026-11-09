@@ -1,3 +1,9 @@
+---
+title: "Consent Mode v2"
+description: "The consent banner tag on Consent Initialization, defaults, per-tag consent settings, audit rules."
+order: 70
+---
+
 # Consent Mode v2
 
 Relevant whenever the site shows a consent banner (a CMP) or has visitors from

@@ -50,6 +50,7 @@ const STATUS: SetupStatus = {
 	allowedDomains: false,
 	rateLimits: true,
 	scopes: ["openid", READONLY],
+	toolGroups: { groups: ["tags"], isDefault: false },
 };
 
 describe("/setup routing and headers", () => {
@@ -179,7 +180,7 @@ describe("/setup URLs and client snippets", () => {
 
 	it("names the tools that fail when an optional scope is missing", async () => {
 		const without = await setupWith({ GOOGLE_SCOPES: READONLY });
-		expect(without).toContain(`Without <code>${PUBLISH}</code>, publish_version will fail`);
+		expect(without).toContain(`Without <code>${PUBLISH}</code>, publish_version and reauthorize_environment will fail`);
 		expect(without).toContain(
 			`Without <code>${DELETE_CONTAINERS}</code>, delete_workspace and delete_container will fail`,
 		);

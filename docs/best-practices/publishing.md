@@ -1,3 +1,9 @@
+---
+title: "Publishing workflow and safety"
+description: "The life of a change: workspace, review, version, and publish only on the user's explicit go-ahead. How to undo a bad release."
+order: 10
+---
+
 # Publishing workflow and safety
 
 A change moves through five stages: **workspace → review → version → review
@@ -24,8 +30,8 @@ in the GTM UI.
 - Before an update, fetch the entity with `get_*`. Send only the fields that
   change, together with the `fingerprint` you just read. Omitted fields are
   kept; a list you send replaces the stored list, and `[]` empties it.
-- A fingerprint conflict means someone else edited the entity in the
-  meantime. Fetch it again and redo your change on top; never try to force it.
+- A fingerprint conflict means it changed since you read it (maybe by your
+  own earlier call). Fetch it again and redo your change; never force it.
 - `delete_*` tools, `disable_built_in_variables` and `set_user_permission`
   do nothing without `confirm: true`. Call them without it first, show the
   user the preview, and confirm only after they agree.
@@ -80,4 +86,4 @@ workspace is slower and error-prone.
 - Never delete things as a by-product of another task; raise deletions as
   their own proposal. `delete_workspace` discards unversioned work, and
   `delete_container` removes the container and its versions for good: it
-  needs the container's public ID typed back.
+  needs the container's public ID typed by the user.

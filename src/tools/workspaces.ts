@@ -1,19 +1,32 @@
 import { z } from "zod";
-import { accounts, type QuickPreviewResponse } from "../gtm/generated";
+import { accounts, type QuickPreviewResponse, type Workspace } from "../gtm/generated";
+import { getMergePut } from "../gtm/merge";
 import { containerPath, workspacePath } from "../gtm/paths";
 import type { ToolGroup } from "../mcp/registry";
-import { fail, ok, okList } from "../mcp/result";
-import { confirmInput, containerInput, nameInput, workspaceInput } from "./inputs";
-import { summarizeWorkspaceStatus, versionCounts, WORKSPACE_NOT_LIVE_NOTE } from "./summaries";
-import { deleteWithConfirm, okWrite } from "./write";
+import { fail, ok, okEntity, okList } from "../mcp/result";
+import { deleteWithConfirm } from "./confirm";
+import { confirmInput, containerInput, fingerprintInput, nameInput, workspaceInput } from "./inputs";
+import { resolveConflictsIn, summarizeWorkspaceStatus, versionCounts, WORKSPACE_NOT_LIVE_NOTE } from "./summaries";
+import { isEmptyPatch, okWrite } from "./write";
 
 const workspaces = accounts.containers.workspaces;
 
+/** Q27: a new workspace copies the latest saved version, which need not be the live one. */
+export const NEW_WORKSPACE_NOTE =
+	"It starts as a copy of the latest saved version, which may not be the live one (get_live_version); entities already in it are not your changes.";
+
+function workspaceSummary(w: Workspace) {
+	return { workspaceId: w.workspaceId, name: w.name, description: w.description, fingerprint: w.fingerprint };
+}
+
 /** Why a quick preview did not compile, or undefined when it did (the Q20 shapes). */
-export function quickPreviewProblem(response: QuickPreviewResponse | undefined): string | undefined {
+export function quickPreviewProblem(
+	response: QuickPreviewResponse | undefined,
+	resolveIn = resolveConflictsIn(undefined, false),
+): string | undefined {
 	if (response?.compilerError) return "The workspace does not compile. Fix the errors shown in GTM, then retry.";
 	if (response?.syncStatus?.mergeConflict) {
-		return "The workspace has merge conflicts with the latest version. Resolve them in GTM, then retry.";
+		return `The workspace has merge conflicts with the latest version. Resolve them ${resolveIn}, then retry.`;
 	}
 	if (response?.syncStatus?.syncError) return "GTM could not sync the workspace with the latest version. Retry.";
 	if (!response?.containerVersion) return "GTM returned no preview for this workspace.";
@@ -24,7 +37,7 @@ export const workspaceTools: ToolGroup = (tools) => {
 	tools.add(
 		"list_workspaces",
 		{
-			description: "List the workspaces in a GTM container. Edits happen in a workspace, not on the live container.",
+			description: "List a container's workspaces. Edits happen in a workspace, not on the live container.",
 			input: containerInput,
 			annotations: { readOnlyHint: true },
 		},
@@ -43,14 +56,60 @@ export const workspaceTools: ToolGroup = (tools) => {
 	);
 
 	tools.add(
-		"get_workspace_status",
+		"get_workspace",
 		{
-			description:
-				"List a workspace's pending changes and merge conflicts. Changes are not live until a version is created (create_version) and published (publish_version).",
+			description: "Get a workspace's name and description, plus its fingerprint for update_workspace.",
 			input: workspaceInput,
 			annotations: { readOnlyHint: true },
 		},
-		async (ids, { gtm }) => ok(summarizeWorkspaceStatus(await workspaces.getStatus(gtm, { path: workspacePath(ids) }))),
+		async (ids, { gtm }) => okEntity(workspaceSummary(await workspaces.get(gtm, { path: workspacePath(ids) }))),
+	);
+
+	tools.add(
+		"update_workspace",
+		{
+			description: "Rename a workspace or change its description. Omitted fields are kept.",
+			input: workspaceInput.extend({
+				name: z.string().trim().min(1).max(256).optional(),
+				description: z.string().optional().describe('"" clears it'),
+				fingerprint: fingerprintInput,
+			}),
+			annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+		},
+		async ({ name, description, fingerprint, ...ids }, { gtm }) => {
+			if (isEmptyPatch({ name, description })) return fail("Nothing to change: pass name and/or description.");
+			const path = workspacePath(ids);
+			// Q1/Q2: workspaces.update is a PUT, so get-merge-put keeps the fields left out.
+			const { result } = await getMergePut<Workspace, Partial<Workspace>>({
+				path,
+				patch: { name, description },
+				expectedFingerprint: fingerprint,
+				get: () => workspaces.get(gtm, { path }),
+				put: (body, fp) => workspaces.update(gtm, { path, fingerprint: fp }, body),
+				normalize: (patch) => ({ value: patch, warnings: [] }),
+			});
+			return okWrite(
+				{ workspace: workspaceSummary(result) },
+				{ note: "Only the workspace's name or description changed; nothing on the site changed." },
+			);
+		},
+	);
+
+	tools.add(
+		"get_workspace_status",
+		{
+			description:
+				"List a workspace's pending changes and merge conflicts. Nothing is live until create_version, then publish_version.",
+			input: workspaceInput,
+			annotations: { readOnlyHint: true },
+		},
+		async (ids, { gtm, env }) =>
+			ok(
+				summarizeWorkspaceStatus(
+					await workspaces.getStatus(gtm, { path: workspacePath(ids) }),
+					resolveConflictsIn(env.GTM_TOOL_GROUPS, true),
+				),
+			),
 	);
 
 	tools.add(
@@ -68,7 +127,7 @@ export const workspaceTools: ToolGroup = (tools) => {
 			const w = await workspaces.create(gtm, { parent: containerPath(ids) }, { name, description });
 			return okWrite(
 				{ workspace: { workspaceId: w.workspaceId, name: w.name, description: w.description } },
-				{ note: WORKSPACE_NOT_LIVE_NOTE },
+				{ note: `${NEW_WORKSPACE_NOTE} ${WORKSPACE_NOT_LIVE_NOTE}` },
 			);
 		},
 	);
@@ -79,11 +138,12 @@ export const workspaceTools: ToolGroup = (tools) => {
 			description:
 				"Check that a workspace compiles by building a throwaway preview version. Saves and publishes nothing.",
 			input: workspaceInput,
-			annotations: { readOnlyHint: true },
+			// A POST that builds a preview on Google's side: not a read, though nothing is saved.
+			annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 		},
-		async (ids, { gtm }) => {
+		async (ids, { gtm, env }) => {
 			const response = await workspaces.quickPreview(gtm, { path: workspacePath(ids) });
-			const problem = quickPreviewProblem(response);
+			const problem = quickPreviewProblem(response, resolveConflictsIn(env.GTM_TOOL_GROUPS, false));
 			if (problem) return fail(problem);
 			return ok({
 				compiles: true,
@@ -97,7 +157,7 @@ export const workspaceTools: ToolGroup = (tools) => {
 		"delete_workspace",
 		{
 			description:
-				"Delete a workspace and discard its unversioned changes. Without confirm: true, only shows what would be lost. Saved versions are kept.",
+				"Delete a workspace and discard its unversioned changes. Without confirm: true, only previews what would be lost. Saved versions are kept.",
 			input: workspaceInput.extend({ confirm: confirmInput("delete") }),
 			annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 		},
@@ -105,6 +165,7 @@ export const workspaceTools: ToolGroup = (tools) => {
 			const path = workspacePath(ids);
 			return deleteWithConfirm({
 				confirm,
+				toolName: "delete_workspace",
 				kind: "workspace",
 				id: ids.workspaceId,
 				get: () => workspaces.get(gtm, { path }),

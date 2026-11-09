@@ -3,6 +3,7 @@
 
 import type { ContainerVersion, Entity, GetWorkspaceStatusResponse } from "../gtm/generated";
 import { compact } from "../mcp/result";
+import { parseToolGroups } from "./groups";
 
 /** Q9 (GTM_API_QUIRKS.md): the model must not tell the user that workspace changes are live. */
 export const WORKSPACE_NOT_LIVE_NOTE =
@@ -28,7 +29,28 @@ export function describeEntity(entity: Entity | undefined) {
 	return { kind: "unknown" };
 }
 
-export function summarizeWorkspaceStatus(status: GetWorkspaceStatusResponse | undefined) {
+/**
+ * Where to resolve merge conflicts: with resolve_workspace_conflict when the workspace-admin
+ * group is on, else in the GTM UI. `listed` false: GTM reported conflicts that
+ * get_workspace_status may not show until the workspace is synced (seen live).
+ */
+export function resolveConflictsIn(toolGroups: string | undefined, listed: boolean): string {
+	let admin = false;
+	try {
+		admin = parseToolGroups(toolGroups).has("workspace-admin");
+	} catch {
+		// An invalid GTM_TOOL_GROUPS never reaches a tool; the GTM UI is always right anyway.
+	}
+	if (!admin) return "in the GTM UI";
+	return listed
+		? "with resolve_workspace_conflict (one call per entity) or in the GTM UI"
+		: "with sync_workspace (it lists them with fingerprints), then resolve_workspace_conflict, or in the GTM UI";
+}
+
+export function summarizeWorkspaceStatus(
+	status: GetWorkspaceStatusResponse | undefined,
+	resolveIn = resolveConflictsIn(undefined, true),
+) {
 	const changes = (status?.workspaceChange ?? []).map((e) => ({ ...describeEntity(e), changeStatus: e.changeStatus }));
 	const conflicts = (status?.mergeConflict ?? []).map((c) =>
 		describeEntity(c.entityInWorkspace ?? c.entityInBaseVersion),
@@ -39,14 +61,21 @@ export function summarizeWorkspaceStatus(status: GetWorkspaceStatusResponse | un
 		...compact({ changes, conflicts }),
 		note:
 			conflicts.length > 0
-				? `Resolve the merge conflicts in the GTM UI before creating a version. ${WORKSPACE_NOT_LIVE_NOTE}`
+				? `Resolve the merge conflicts ${resolveIn} before creating a version. ${WORKSPACE_NOT_LIVE_NOTE}`
 				: changes.length > 0
 					? WORKSPACE_NOT_LIVE_NOTE
 					: "No pending changes in this workspace.",
 	};
 }
 
-const count = (list: readonly unknown[] | undefined) => list?.length ?? 0;
+/**
+ * How many: a list's length, or one of Google's string counts (`numTags: "3"` on version
+ * headers). Google omits both when the count is zero, so undefined is 0.
+ */
+export function count(value: readonly unknown[] | string | undefined): number {
+	if (value === undefined) return 0;
+	return typeof value === "string" ? Number(value) : value.length;
+}
 
 /** Tag/trigger/variable counts, plus any other entity kind the version has. */
 export function versionCounts(v: ContainerVersion) {

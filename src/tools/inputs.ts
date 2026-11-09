@@ -20,9 +20,9 @@ export function gtmId(what: string) {
 		.describe(what);
 }
 
-export const accountInput = z.object({ accountId: gtmId("GTM account ID") });
-export const containerInput = accountInput.extend({ containerId: gtmId("GTM container ID (numeric, not GTM-XXXX)") });
-export const workspaceInput = containerInput.extend({ workspaceId: gtmId("GTM workspace ID") });
+export const accountInput = z.object({ accountId: gtmId("Account ID") });
+export const containerInput = accountInput.extend({ containerId: gtmId("Container ID (numeric, not GTM-XXXX)") });
+export const workspaceInput = containerInput.extend({ workspaceId: gtmId("Workspace ID") });
 
 export type AccountInput = z.output<typeof accountInput>;
 export type ContainerInput = z.output<typeof containerInput>;
@@ -44,11 +44,11 @@ export const notesInput = z.string().optional().describe('Notes; "" clears them 
 export const fingerprintInput = z
 	.string()
 	.optional()
-	.describe("From your get_* call: the update fails if the entity changed since");
+	.describe("From get_*: the update fails if the entity changed since");
 
 /** Deletes: without `confirm: true` they only return a preview. */
 export const confirmInput = (action: string) =>
-	z.boolean().optional().describe(`true to ${action}; omit to get a preview and change nothing`);
+	z.boolean().optional().describe(`true to ${action}; omit to only preview`);
 
 // ---- Parameter / Condition (generated.ts shapes) ------------------------------------
 

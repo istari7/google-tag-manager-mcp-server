@@ -1,3 +1,9 @@
+---
+title: "Naming and organisation"
+description: "How to name tags, triggers and variables, when to use folders, and what counts as clutter."
+order: 20
+---
+
 # Naming and organisation
 
 Someone scanning the container list should know what each entity does
@@ -33,7 +39,9 @@ Guidelines:
   folders by vendor or role, for example `GA4`, `Ads`, `Consent`, `Helpers`.
 - When folders exist, put every new entity in the right one
   (`parentFolderId` on create, or `move_entities_to_folder` afterwards).
-  Create a folder with `create_folder` if none fits.
+  Create a folder with `create_folder` if none fits. Those two tools are in
+  the optional `folder-admin` tool group; without it, set `parentFolderId`
+  on create, or ask the user to create or move folders in the GTM UI.
 
 ## Clutter to report
 

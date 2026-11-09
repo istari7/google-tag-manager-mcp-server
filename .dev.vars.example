@@ -18,3 +18,7 @@ COOKIE_SECRET=
 # email suffix, so list Gmail accounts in ALLOWED_EMAILS.
 ALLOWED_EMAILS=
 ALLOWED_DOMAINS=
+
+# Not a secret (it lives in wrangler.jsonc "vars"), but .dev.vars can override it for
+# `pnpm dev`. Uncomment to try every tool group locally:
+# GTM_TOOL_GROUPS=all

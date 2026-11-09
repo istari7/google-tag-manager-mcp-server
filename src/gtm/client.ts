@@ -23,6 +23,11 @@ export interface RequestOptions {
 	query?: Query;
 	/** Serialised as JSON. Leave undefined for no body. */
 	body?: unknown;
+	/**
+	 * false: never retry, even a 429 (Q16). For calls whose 429 is not a rate limit, e.g. a
+	 * second Google tag config of one type (Q31). See {@link withoutRetries}.
+	 */
+	retry?: boolean;
 }
 
 /** The minimal surface the generated wrappers need. Easy to fake in tests. */
@@ -70,6 +75,20 @@ export interface GtmClientOptions {
 export const MAX_RETRIES = 3;
 export const BACKOFF_MS: readonly number[] = [1000, 2000, 4000];
 export const DEFAULT_MAX_PAGES = 20;
+
+/**
+ * List pages one tool call (or prompt) may read when it lists several things at once: a
+ * skill's live data, or the reference checks of delete_trigger / delete_variable /
+ * delete_template. Each page is a subrequest, and a Worker gets 50 per request on the Free
+ * plan; this leaves room for the reads and writes around the lists, a token refresh and
+ * retries. Results that hit it say so (`truncated`).
+ */
+export const LIST_PAGE_BUDGET = 24;
+
+/** `maxPages` for each of `lists` lists read for one call, so together they stay in LIST_PAGE_BUDGET. */
+export function pagesPerList(lists: number): ListAllOptions {
+	return { maxPages: Math.max(1, Math.floor(LIST_PAGE_BUDGET / Math.max(1, lists))) };
+}
 
 const defaultSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -182,7 +201,7 @@ export function createGtmClient(options: GtmClientOptions): GtmClient {
 				parsed = undefined;
 			}
 			const error = toGtmApiError({ status: res.status, method, path: label, body: parsed, rawText: text });
-			if (error.retryable && attempt < maxRetries) {
+			if (error.retryable && opts.retry !== false && attempt < maxRetries) {
 				await sleep(BACKOFF_MS[attempt] ?? BACKOFF_MS[BACKOFF_MS.length - 1] ?? 4000);
 				continue;
 			}
@@ -191,6 +210,15 @@ export function createGtmClient(options: GtmClientOptions): GtmClient {
 	}
 
 	return { request, listAll };
+}
+
+/** A requester for the generated wrappers that sends every request once, with no retry. */
+export function withoutRetries(client: GtmRequester): GtmRequester {
+	return {
+		request<T>(method: HttpMethod, path: string, options: RequestOptions = {}): Promise<T> {
+			return client.request<T>(method, path, { ...options, retry: false });
+		},
+	};
 }
 
 /** One row of the generated `methods` table. */

@@ -77,7 +77,10 @@ describe("get_live_version", () => {
 });
 
 describe("list_versions", () => {
-	it("GETs {container}/version_headers across pages, newest first, with counts as numbers", async () => {
+	const LIVE = `${CONTAINER}/versions:live`;
+	const neverPublished = { [LIVE]: reply(errors.notFound404, 404) };
+
+	it("GETs {container}/version_headers across pages, newest first, with counts as numbers, and marks the live one", async () => {
 		const mock = mockGtm({
 			[`${CONTAINER}/version_headers`]: pages("containerVersionHeader", [
 				[
@@ -86,18 +89,31 @@ describe("list_versions", () => {
 				],
 				[{ containerVersionId: "42", name: "Latest", numTags: "5", numTriggers: "3", numVariables: "2" }],
 			]),
+			[LIVE]: reply({ containerVersionId: "41", name: "Prev" }),
 		});
 		const result = await callTool("list_versions", CONTAINER_ARGS);
 		expect(mock.gtm().map(describeCall)).toMatchObject([
 			{ method: "GET", path: `${CONTAINER}/version_headers`, query: {} },
 			{ method: "GET", path: `${CONTAINER}/version_headers`, query: { pageToken: "p2" } },
+			{ method: "GET", path: LIVE, query: {} },
 		]);
 		expect(result.json()).toEqual({
 			versions: [
 				{ containerVersionId: "42", name: "Latest", numTags: 5, numTriggers: 3, numVariables: 2 },
-				{ containerVersionId: "41", name: "Prev", numTags: 4, numTriggers: 2, numVariables: 1 },
+				{ containerVersionId: "41", name: "Prev", numTags: 4, numTriggers: 2, numVariables: 1, live: true },
 				{ containerVersionId: "9", name: "Old", numTags: 3, numTriggers: 2, numVariables: 1 },
 			],
+		});
+	});
+
+	it("marks nothing live when the container was never published (live 404)", async () => {
+		mockGtm({
+			[`${CONTAINER}/version_headers`]: reply({ containerVersionHeader: [{ containerVersionId: "1", name: "v1" }] }),
+			...neverPublished,
+		});
+		const result = await callTool("list_versions", CONTAINER_ARGS);
+		expect(result.json()).toEqual({
+			versions: [{ containerVersionId: "1", name: "v1", numTags: 0, numTriggers: 0, numVariables: 0 }],
 		});
 	});
 
@@ -106,6 +122,7 @@ describe("list_versions", () => {
 			[`${CONTAINER}/version_headers`]: reply({
 				containerVersionHeader: [{ containerVersionId: "3", name: "Gone", deleted: true }],
 			}),
+			...neverPublished,
 		});
 		const result = await callTool("list_versions", { ...CONTAINER_ARGS, includeDeleted: true });
 		expect(describeCall(mock.gtm()[0]).query).toEqual({ includeDeleted: "true" });
@@ -122,6 +139,7 @@ describe("list_versions", () => {
 					{ containerVersionId: "1", name: "Empty" },
 				],
 			}),
+			...neverPublished,
 		});
 		const result = await callTool("list_versions", CONTAINER_ARGS);
 		expect(result.json()).toEqual({
@@ -190,9 +208,17 @@ describe("create_version", () => {
 		const result = await callTool("create_version", ARGS);
 		expect(result.isError).toBe(true);
 		expect(result.text).toBe(
-			'Workspace 7 has 1 merge conflict(s) (trigger 34 "Link - Outbound"). Resolve them in the GTM UI, then retry. No version was created.',
+			'Workspace 7 has 1 merge conflict(s) (trigger 34 "Link - Outbound"). Resolve them with resolve_workspace_conflict (one call per entity) or in the GTM UI, then retry. No version was created.',
 		);
 		expect(writes(mock.gtm())).toHaveLength(0);
+	});
+
+	it("a Google-side merge conflict points at sync_workspace, then resolve_workspace_conflict (workspace-admin on)", async () => {
+		mockGtm({ [STATUS]: reply(pending), [CREATE]: reply({ syncStatus: { mergeConflict: true } }) });
+		const result = await callTool("create_version", ARGS);
+		expect(result.text).toContain(
+			"with sync_workspace (it lists them with fingerprints), then resolve_workspace_conflict",
+		);
 	});
 
 	it.each([
@@ -226,6 +252,19 @@ describe("publish_version", () => {
 		path: VERSION,
 	};
 
+	it("the preview spells out every tag's paused state (active tags fire once published)", async () => {
+		const html = { tagId: "13", name: "cHTML - Chat", type: "html", paused: true };
+		mockGtm({
+			[VERSION]: reply({ ...v43, tag: [ga4EventTag, html] }),
+			[LIVE]: reply({ containerVersionId: "42", name: "Empty Container" }),
+		});
+		const result = await callTool("publish_version", ARGS);
+		expect(result.json<{ wouldPublish: { tags: unknown } }>().wouldPublish.tags).toEqual([
+			{ tagId: "12", name: "GA4 - Event - sign_up", type: "gaawe", paused: false },
+			{ tagId: "13", name: "cHTML - Chat", type: "html", paused: true },
+		]);
+	});
+
 	it.each([{}, { confirm: false }])("without confirm: true (%o) only reads and previews", async (extra) => {
 		const mock = mockGtm({
 			[VERSION]: reply(v43),
@@ -245,7 +284,7 @@ describe("publish_version", () => {
 				containerVersionId: "43",
 				name: "Add sign_up",
 				counts: { tags: 1, triggers: 1, variables: 0 },
-				tags: [{ tagId: "12", name: "GA4 - Event - sign_up", type: "gaawe" }],
+				tags: [{ tagId: "12", name: "GA4 - Event - sign_up", type: "gaawe", paused: false }],
 				triggers: [{ triggerId: "34", name: "Link - Outbound", type: "linkClick" }],
 			},
 			currentlyLive: { containerVersionId: "42", name: "Empty Container" },

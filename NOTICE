@@ -1,0 +1,58 @@
+gtm-mcp
+Copyright (c) 2026, Tariq Syed. BSD 3-Clause License, see LICENSE.
+
+This project adapts material from gtm-mcp-server by Paolo Bietolini
+(https://github.com/paolobietolini/gtm-mcp-server), BSD 3-Clause License.
+It is an independent project and is not endorsed by him.
+
+Adapted material:
+
+- skills/gtm-mcp/SKILL.md: adapted from that project's client skill
+  (skills/gtm-mcp/gtm-mcp.md).
+- skills/audit-container, skills/best-practices-review, skills/plan-safe-edit,
+  skills/generate-tracking-plan, skills/suggest-ga4-setup and
+  skills/find-gallery-template (SKILL.md each): adapted from the texts of its
+  MCP prompts of similar names (gtm/prompts.go).
+- src/tools/guidance.ts (get_tag_templates, get_trigger_templates): the idea
+  and starting set of examples adapted from gtm/templates.go, rewritten for
+  this server's argument names.
+- src/tools/templates.ts (custom template tools): tool names and the
+  `cvt_…` type rule adapted from gtm/tool_templates.go and the
+  gtm/tool_*_template.go files.
+
+Each adapted skill names this notice in its `license` frontmatter field, and
+each adapted source file in its header comment.
+
+The notice and license of gtm-mcp-server follow.
+
+--------------------------------------------------------------------------------
+
+BSD 3-Clause License
+
+Copyright (c) 2026, Paolo Bietolini
+<license@paolobietolini.com>
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

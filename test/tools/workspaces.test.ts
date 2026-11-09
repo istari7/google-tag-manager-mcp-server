@@ -3,7 +3,8 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GetWorkspaceStatusResponse } from "../../src/gtm/generated";
-import { WORKSPACE_NOT_LIVE_NOTE } from "../../src/tools/summaries";
+import { resolveConflictsIn, WORKSPACE_NOT_LIVE_NOTE } from "../../src/tools/summaries";
+import { NEW_WORKSPACE_NOTE } from "../../src/tools/workspaces";
 import { errors, folder, ga4EventTag, linkClickTrigger } from "../fixtures/gtm";
 import {
 	byMethod,
@@ -74,6 +75,8 @@ describe("get_workspace_status", () => {
 		});
 		// Q9: never let the model think workspace changes are live.
 		expect(out.note).toContain("merge conflicts");
+		// Every group is on in tool tests, so the note names the tool that resolves them.
+		expect(out.note).toContain("resolve_workspace_conflict");
 		expect(out.note).toContain("not live");
 		expect(result.text).not.toContain("parameter");
 	});
@@ -103,7 +106,7 @@ describe("get_workspace_status", () => {
 });
 
 describe("create_workspace", () => {
-	it("POSTs {container}/workspaces with the name and description", async () => {
+	it("create_workspace POSTs name and description, and says it starts from the latest version (Q27)", async () => {
 		const mock = mockGtm({
 			[`${CONTAINER}/workspaces`]: reply({
 				workspaceId: "9",
@@ -129,7 +132,7 @@ describe("create_workspace", () => {
 		]);
 		expect(result.json()).toEqual({
 			workspace: { workspaceId: "9", name: "Add GA4 purchase", description: "Checkout" },
-			note: WORKSPACE_NOT_LIVE_NOTE,
+			note: `${NEW_WORKSPACE_NOTE} ${WORKSPACE_NOT_LIVE_NOTE}`,
 		});
 	});
 });
@@ -200,5 +203,21 @@ describe("delete_workspace", () => {
 			deleted: { kind: "workspace", id: "7" },
 			note: "The workspace and its unversioned changes are gone. Saved versions and the live container are unchanged.",
 		});
+	});
+});
+
+describe("resolveConflictsIn", () => {
+	it.each([
+		[undefined, true, "in the GTM UI"],
+		["default", false, "in the GTM UI"],
+		["default,workspace-admin", true, "with resolve_workspace_conflict (one call per entity) or in the GTM UI"],
+		[
+			"all",
+			false,
+			"with sync_workspace (it lists them with fingerprints), then resolve_workspace_conflict, or in the GTM UI",
+		],
+		["not-a-group", true, "in the GTM UI"],
+	])("GTM_TOOL_GROUPS=%s (listed: %s) → %s", (groups, listed, where) => {
+		expect(resolveConflictsIn(groups, listed)).toBe(where);
 	});
 });

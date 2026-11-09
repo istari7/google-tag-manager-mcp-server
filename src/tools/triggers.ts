@@ -3,10 +3,10 @@ import { accounts, type Trigger } from "../gtm/generated";
 import { createTrigger, updateTrigger } from "../gtm/merge";
 import { triggerPath, workspacePath } from "../gtm/paths";
 import type { ToolGroup } from "../mcp/registry";
-import { fail, okEntity, okList } from "../mcp/result";
+import { fail } from "../mcp/result";
+import { addDeleteTool, addGetTool, addListTool, workspaceEntity } from "./entity";
 import {
 	conditionsInput,
-	confirmInput,
 	fingerprintInput,
 	gtmId,
 	nameInput,
@@ -15,10 +15,19 @@ import {
 	parametersInput,
 	workspaceInput,
 } from "./inputs";
-import { deleteWithConfirm, isEmptyPatch, okWrite } from "./write";
+import { type References, referencePreview, rejectedDeleteMessage, triggerReferences } from "./references";
+import { isEmptyPatch, okWrite } from "./write";
 
 const triggers = accounts.containers.workspaces.triggers;
-const tags = accounts.containers.workspaces.tags;
+
+/** How to free the trigger, naming only the kinds of entity that use it (Q26). */
+function triggerFix(refs: References): string {
+	const steps = [
+		(refs.found.usedByTags?.length ?? 0) > 0 && "from those tags' firingTriggerId/blockingTriggerId (update_tag)",
+		(refs.found.usedByTriggerGroups?.length ?? 0) > 0 && "from those trigger groups' list of triggers (update_trigger)",
+	].filter((s): s is string => typeof s === "string");
+	return steps.length > 0 ? `First remove it ${steps.join(" and ")}, or delete them.` : "";
+}
 
 /** One list_triggers row; also the delete_trigger preview. */
 export function triggerRow(t: Trigger) {
@@ -93,33 +102,27 @@ const triggerFields = z.object({
 
 const triggerIdInput = { triggerId: gtmId("Trigger ID") };
 
-export const triggerTools: ToolGroup = (tools) => {
-	tools.add(
-		"list_triggers",
-		{
-			description: "List the triggers in a GTM workspace: ID, name, type and folder.",
-			input: workspaceInput,
-			annotations: { readOnlyHint: true },
-		},
-		async (ids, { gtm }) => {
-			const parent = workspacePath(ids);
-			const list = await gtm.listAll(
-				(pageToken) => triggers.list(gtm, { parent, pageToken }),
-				(page) => page.trigger,
-			);
-			return okList("triggers", list, triggerRow);
-		},
-	);
+const trigger = workspaceEntity({
+	kind: "trigger",
+	ids: workspaceInput.extend(triggerIdInput),
+	id: (ids) => ids.triggerId,
+	path: triggerPath,
+	api: triggers,
+	items: (page) => page.trigger,
+	row: triggerRow,
+});
 
-	tools.add(
-		"get_trigger",
-		{
-			description: "Get one trigger with its conditions (filter, autoEventFilter, customEventFilter) and fingerprint.",
-			input: workspaceInput.extend(triggerIdInput),
-			annotations: { readOnlyHint: true },
-		},
-		async (ids, { gtm }) => okEntity(await triggers.get(gtm, { path: triggerPath(ids) })),
-	);
+export const triggerTools: ToolGroup = (tools) => {
+	addListTool(tools, trigger, {
+		name: "list_triggers",
+		key: "triggers",
+		description: "List a workspace's triggers: ID, name, type, folder.",
+	});
+
+	addGetTool(tools, trigger, {
+		name: "get_trigger",
+		description: "Get one trigger with its conditions (filter, autoEventFilter, customEventFilter) and fingerprint.",
+	});
 
 	tools.add(
 		"create_trigger",
@@ -140,7 +143,7 @@ export const triggerTools: ToolGroup = (tools) => {
 		"update_trigger",
 		{
 			description:
-				"Change some fields of a trigger; omitted fields are kept, [] clears a list. Pass the fingerprint from get_trigger to avoid overwriting newer edits.",
+				"Change some fields of a trigger; omitted fields are kept, [] clears a list. Pass get_trigger's fingerprint to avoid overwriting newer edits.",
 			input: workspaceInput
 				.extend(triggerIdInput)
 				.extend(triggerFields.partial().shape)
@@ -155,36 +158,17 @@ export const triggerTools: ToolGroup = (tools) => {
 		},
 	);
 
-	tools.add(
-		"delete_trigger",
-		{
-			description:
-				"Delete a trigger from a workspace. Without confirm: true, only shows what would be deleted and which tags use it.",
-			input: workspaceInput.extend(triggerIdInput).extend({ confirm: confirmInput("delete") }),
-			annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+	addDeleteTool(tools, trigger, {
+		name: "delete_trigger",
+		description: "Delete a trigger. Without confirm: true, only previews it and what uses it.",
+		// Q26: GTM refuses to delete a trigger that tags (or trigger groups) still use.
+		related: async (ids, { gtm }) => {
+			const refs = await triggerReferences(gtm, ids, ids.triggerId);
+			return referencePreview("trigger", refs, triggerFix(refs));
 		},
-		async ({ confirm, ...ids }, { gtm }) => {
-			const path = triggerPath(ids);
-			return deleteWithConfirm({
-				confirm,
-				kind: "trigger",
-				id: ids.triggerId,
-				get: () => triggers.get(gtm, { path }),
-				summarize: triggerRow,
-				// Tags that fire on or are blocked by this trigger lose it when it is deleted.
-				related: async () => {
-					const parent = workspacePath(ids);
-					const list = await gtm.listAll(
-						(pageToken) => tags.list(gtm, { parent, pageToken }),
-						(page) => page.tag,
-					);
-					const usedByTags = list.items
-						.filter((t) => t.firingTriggerId?.includes(ids.triggerId) || t.blockingTriggerId?.includes(ids.triggerId))
-						.map((t) => ({ tagId: t.tagId, name: t.name }));
-					return { usedByTags };
-				},
-				remove: () => triggers.delete(gtm, { path }),
-			});
+		rejected: async (ids, { gtm }) => {
+			const refs = await triggerReferences(gtm, ids, ids.triggerId);
+			return rejectedDeleteMessage("trigger", ids.triggerId, refs, triggerFix(refs));
 		},
-	);
+	});
 };

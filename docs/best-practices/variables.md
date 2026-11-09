@@ -1,3 +1,9 @@
+---
+title: "Variables"
+description: "Picking the right variable type: data layer, built-ins, constants, lookup tables, custom JavaScript."
+order: 50
+---
+
 # Variables
 
 Variables are how tags and triggers read values. Fewer, well-named variables
