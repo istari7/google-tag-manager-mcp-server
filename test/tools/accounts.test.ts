@@ -268,6 +268,28 @@ describe("delete_container", () => {
 		},
 	);
 
+	it("masks the public ID where the container's name, notes or domains repeat it", async () => {
+		const named: Container = {
+			...container,
+			name: "GTM-ABC1234 (main site)",
+			notes: "Snippet gtm-abc1234 is on every page",
+			domainName: ["gtm-abc1234.example.com"],
+		};
+		const mock = mockGtm({ [CONTAINER]: byMethod({ GET: reply(named) }) });
+		const result = await callTool("delete_container", CONTAINER_ARGS);
+		expect(mock.gtm().map(describeCall)).toMatchObject([{ method: "GET", path: CONTAINER }]);
+		expect(result.json()).toMatchObject({
+			preview: true,
+			wouldDelete: {
+				name: "GTM-*****34 (main site)",
+				notes: "Snippet GTM-*****34 is on every page",
+				domainName: ["GTM-*****34.example.com"],
+				publicIdMasked: "GTM-*****34",
+			},
+		});
+		expect(result.text.toUpperCase()).not.toContain("GTM-ABC1234");
+	});
+
 	it.each([undefined, "GTM-WRONG99", ""])("with confirm: true but publicId %o deletes nothing", async (publicId) => {
 		const mock = mockGtm({ [CONTAINER]: byMethod({ GET: reply(container) }) });
 		const result = await callTool("delete_container", { ...CONTAINER_ARGS, confirm: true, publicId });

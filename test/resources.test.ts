@@ -88,4 +88,12 @@ describe("best-practices resources", () => {
 		const { error } = await read(`${BEST_PRACTICES_URI}/nope`);
 		expect(error).toMatchObject({ code: -32602, message: expect.stringContaining("publishing, naming") });
 	});
+
+	it.each(["constructor", "toString", "__proto__", "hasOwnProperty"])(
+		"treats the Object.prototype name %o as an unknown topic",
+		async (name) => {
+			const { error } = await read(`${BEST_PRACTICES_URI}/${name}`);
+			expect(error).toMatchObject({ code: -32602, message: expect.stringContaining("Unknown topic") });
+		},
+	);
 });

@@ -51,7 +51,8 @@ export function registerBestPractices(server: McpServer): void {
 		{ title: "GTM best-practice topic", description: `One topic: ${names.join(", ")}.`, mimeType: MARKDOWN },
 		(uri, variables) => {
 			const name = variables.topic;
-			const topic = typeof name === "string" ? TOPICS[name] : undefined;
+			// Own keys only: "constructor", "toString", … are on every object's prototype.
+			const topic = typeof name === "string" && Object.hasOwn(TOPICS, name) ? TOPICS[name] : undefined;
 			if (!topic) throw new ResourceNotFoundError(uri.href, `Unknown topic. Topics: ${names.join(", ")}.`);
 			return markdown(uri.href, topic.text);
 		},

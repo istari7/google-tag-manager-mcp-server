@@ -70,7 +70,7 @@ function inputs(skill: SkillEntry, args: PromptArgs): string | undefined {
 
 function references(skill: SkillEntry): string | undefined {
 	const topics = skill.include.flatMap((name) => {
-		const topic = TOPICS[name];
+		const topic = Object.hasOwn(TOPICS, name) ? TOPICS[name] : undefined;
 		return topic ? [topic.text.trimEnd()] : [];
 	});
 	if (!topics.length) return undefined;

@@ -82,6 +82,17 @@ export function maskPublicId(publicId: string | undefined): string | undefined {
 }
 
 /**
+ * Replaces every occurrence of `publicId` (any case) with its mask: a container's name, notes
+ * or domains can contain its own public ID, which delete_container must not spell out.
+ */
+function publicIdRedactor(publicId: string | undefined): (text: string) => string {
+	if (!publicId) return (text) => text;
+	const pattern = new RegExp(publicId.replace(/[^A-Za-z0-9]/g, "\\$&"), "gi");
+	const masked = maskPublicId(publicId) ?? "";
+	return (text) => text.replace(pattern, masked);
+}
+
+/**
  * Most GTM calls lookup_container makes, the containers:lookup call included. The fallback
  * scan lists every account's containers, which would otherwise grow with the number of
  * accounts and pages and could hit the Workers subrequest cap (50 per request on Free).
@@ -269,7 +280,15 @@ export const accountTools: ToolGroup = (tools) => {
 			const expected = container.publicId;
 			// The public ID must come from the user (CLAUDE.md), so neither the preview nor the
 			// refusal spells it out: the model would just copy it into the confirmed call.
-			const { publicId: _publicId, tagIds: _tagIds, ...shown } = containerSummary(container);
+			const { publicId: _publicId, tagIds: _tagIds, ...summary } = containerSummary(container);
+			const redact = publicIdRedactor(expected);
+			const shown = {
+				...summary,
+				name: summary.name && redact(summary.name),
+				notes: summary.notes && redact(summary.notes),
+				domainName: summary.domainName?.map(redact),
+				taggingServerUrls: summary.taggingServerUrls?.map(redact),
+			};
 			return confirmGate({
 				confirm,
 				preview: () =>
