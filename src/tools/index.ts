@@ -15,6 +15,7 @@ import { environmentTools } from "./environments";
 import { folderAdminTools, folderTools } from "./folders";
 import type { ToolGroupName, ToolGroupSelection } from "./groups";
 import { gtagConfigTools } from "./gtag-configs";
+import { serverTools } from "./server-side";
 import { tagTools } from "./tags";
 import { triggerTools } from "./triggers";
 import { userTools } from "./users";
@@ -42,6 +43,7 @@ export const TOOL_MODULES: readonly ToolModule[] = [
 	{ group: "folder-admin", register: folderAdminTools },
 	{ group: "zones", register: zoneTools },
 	{ group: "gtag", register: gtagConfigTools },
+	{ group: "server", register: serverTools },
 	{ group: "workspaces", register: versionTools },
 	{ group: "environments", register: environmentTools },
 	{ group: "destinations", register: destinationTools },

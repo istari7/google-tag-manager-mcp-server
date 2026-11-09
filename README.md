@@ -114,6 +114,12 @@ Groups marked *optional* are off unless you enable them.
 | `gtag` (optional) | `list_google_tag_configs`, `get_google_tag_config` | Lists the Google tag configs GTM creates with GA4, Ads and Floodlight tags (type and tag ID) / gets one in full | read |
 | | `create_google_tag_config`, `update_google_tag_config` | Creates a Google tag config / changes its type or parameters | write |
 | | `delete_google_tag_config` | Deletes a Google tag config, e.g. one left behind after its tag was deleted | destructive |
+| `server` (optional, server containers) | `list_clients`, `get_client` | Lists clients / gets one client in full | read |
+| | `create_client`, `update_client` | Creates a client / changes some fields of a client (other fields are kept) | write |
+| | `delete_client` | Deletes a client; the preview shows the client | destructive |
+| | `list_transformations`, `get_transformation` | Lists transformations / gets one transformation in full | read |
+| | `create_transformation`, `update_transformation` | Creates a transformation / changes some fields of a transformation (other fields are kept) | write |
+| | `delete_transformation` | Deletes a transformation; the preview shows the transformation | destructive |
 | `environments` (optional) | `list_environments`, `get_environment` | Lists a container's environments / gets one with its authorization code | read |
 | | `create_environment` | Creates a user environment (e.g. staging); applies immediately | admin |
 | | `update_environment` | Changes an environment; repointing it to another version or workspace needs `confirm: true` | destructive |
@@ -379,7 +385,7 @@ The Worker asks Google for `openid email profile` (to identify you) plus the sco
 | Scope (`https://www.googleapis.com/auth/…`) | Needed for |
 |---|---|
 | `tagmanager.readonly` | Every read tool |
-| `tagmanager.edit.containers` | Creating workspaces; creating, updating and deleting tags, triggers, variables, folders, built-in variables and Google tag configs |
+| `tagmanager.edit.containers` | Creating workspaces; creating, updating and deleting tags, triggers, variables, folders, built-in variables, Google tag configs, clients and transformations |
 | `tagmanager.edit.containerversions` | `create_version` |
 | `tagmanager.publish` | `publish_version` |
 | `tagmanager.delete.containers` | `delete_workspace`, `delete_container` |

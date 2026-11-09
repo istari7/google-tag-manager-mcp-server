@@ -61,6 +61,12 @@ export interface EnvironmentIds extends ContainerIds {
 export interface DestinationIds extends ContainerIds {
 	destinationLinkId: string;
 }
+export interface ClientIds extends WorkspaceIds {
+	clientId: string;
+}
+export interface TransformationIds extends WorkspaceIds {
+	transformationId: string;
+}
 
 export function accountPath(ids: AccountIds): string {
 	return `accounts/${assertGtmId("accountId", ids.accountId)}`;
@@ -123,6 +129,16 @@ export function destinationPath(ids: DestinationIds): string {
 		throw new InvalidGtmIdError(`destinationLinkId is not a valid ID (got ${JSON.stringify(ids.destinationLinkId)}).`);
 	}
 	return `${containerPath(ids)}/destinations/${ids.destinationLinkId}`;
+}
+
+/** Server containers only. */
+export function clientPath(ids: ClientIds): string {
+	return `${workspacePath(ids)}/clients/${assertGtmId("clientId", ids.clientId)}`;
+}
+
+/** Server containers only. */
+export function transformationPath(ids: TransformationIds): string {
+	return `${workspacePath(ids)}/transformations/${assertGtmId("transformationId", ids.transformationId)}`;
 }
 
 export function versionPath(ids: VersionIds): string {
