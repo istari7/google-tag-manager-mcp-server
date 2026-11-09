@@ -44,7 +44,7 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
   },
   {
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "readOnlyHint": false,
     },
@@ -53,8 +53,9 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "name",
       "shareData",
       "fingerprint",
+      "confirm",
     ],
-    "description": "Rename a GTM account or change its data-sharing setting. Takes effect immediately (not versioned).",
+    "description": "Rename a GTM account or change its data-sharing setting. Takes effect immediately (not versioned). Without confirm: true, only previews.",
     "name": "update_account",
     "required": [
       "accountId",
@@ -505,7 +506,7 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "triggerId",
       "confirm",
     ],
-    "description": "Delete a trigger. Without confirm: true, only previews it and the tags that use it.",
+    "description": "Delete a trigger. Without confirm: true, only previews it and what uses it.",
     "name": "delete_trigger",
     "required": [
       "accountId",
@@ -615,7 +616,7 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "variableId",
       "confirm",
     ],
-    "description": "Delete a variable. Without confirm: true, only previews.",
+    "description": "Delete a variable. Without confirm: true, only previews it and what uses it.",
     "name": "delete_variable",
     "required": [
       "accountId",

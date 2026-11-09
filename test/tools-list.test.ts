@@ -99,6 +99,7 @@ describe("tools/list", () => {
 			"disable_built_in_variables",
 			"publish_version",
 			"set_user_permission",
+			"update_account",
 		]);
 		for (const t of tools) {
 			const a = t.annotations ?? {};

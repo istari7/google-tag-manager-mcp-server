@@ -6,9 +6,12 @@ import type { ToolGroup } from "../mcp/registry";
 import { fail } from "../mcp/result";
 import { addDeleteTool, addGetTool, addListTool, workspaceEntity } from "./entity";
 import { fingerprintInput, gtmId, nameInput, notesInput, parametersInput, workspaceInput } from "./inputs";
+import { referencePreview, rejectedDeleteMessage, variableReferences } from "./references";
 import { isEmptyPatch, okWrite } from "./write";
 
 const variables = accounts.containers.workspaces.variables;
+
+const VARIABLE_FIX = "First replace or remove its {{name}} in those tags, triggers and variables, or delete them.";
 
 /** One list_variables row; also the delete_variable preview. */
 export function variableRow(v: Variable) {
@@ -88,6 +91,13 @@ export const variableTools: ToolGroup = (tools) => {
 
 	addDeleteTool(tools, variable, {
 		name: "delete_variable",
-		description: "Delete a variable. Without confirm: true, only previews.",
+		description: "Delete a variable. Without confirm: true, only previews it and what uses it.",
+		// Q26: GTM refuses to delete a variable that is still referenced as {{name}}.
+		related: async (ids, { gtm }, found) =>
+			referencePreview("variable", await variableReferences(gtm, ids, found), VARIABLE_FIX),
+		rejected: async (ids, { gtm }) => {
+			const found = await variables.get(gtm, { path: variablePath(ids) });
+			return rejectedDeleteMessage("variable", ids.variableId, await variableReferences(gtm, ids, found), VARIABLE_FIX);
+		},
 	});
 };

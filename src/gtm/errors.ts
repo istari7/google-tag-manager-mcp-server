@@ -60,7 +60,8 @@ export const MESSAGES = {
 	auth: "Google session expired. Reconnect the GTM connector.",
 	rateLimit: "GTM API rate limit hit. Wait a minute and retry.",
 	quota: "The GTM API daily quota for this Google Cloud project is used up. It resets at midnight Pacific time.",
-	conflict: "Changed by someone else since it was read. Re-read and retry.",
+	conflict:
+		"It changed since it was read (possibly by an earlier call, even your own). Re-read it with get_* and retry with the new fingerprint.",
 	apiDisabled:
 		"The Tag Manager API is not enabled in this Google Cloud project. Enable it, wait a few minutes, then retry.",
 	scope:
@@ -237,6 +238,33 @@ function withDetail(base: string, detail: string | undefined): string {
 	return detail ? `${base} Google says: ${detail}` : base;
 }
 
+/** Singular names for API path collections whose plural doesn't just lose an "s". */
+const COLLECTION_LABELS: Record<string, string> = {
+	built_in_variables: "built-in variable",
+	gtag_config: "Google tag config",
+	user_permissions: "user permission",
+};
+
+/**
+ * Which IDs to check after a 404, read from the path, innermost first:
+ * `accounts/1/containers/2/workspaces/3/tags/4` → "Check the tag ID, then the
+ * account/container/workspace IDs."
+ */
+export function notFoundHint(resource: string): string {
+	const segments = resource.split("/");
+	const kinds: string[] = [];
+	for (let i = 0; i + 1 < segments.length; i += 2) {
+		const collection = segments[i] ?? "";
+		const id = (segments[i + 1] ?? "").split(":")[0] ?? "";
+		if (!/^\d+$/.test(id)) break;
+		kinds.push(COLLECTION_LABELS[collection] ?? collection.replace(/_/g, " ").replace(/s$/, ""));
+	}
+	const inner = kinds.pop();
+	if (!inner) return "Check the IDs in this path.";
+	if (kinds.length === 0) return `Check the ${inner} ID.`;
+	return `Check the ${inner} ID, then the ${kinds.join("/")} ID${kinds.length > 1 ? "s" : ""}.`;
+}
+
 function resourceOf(path: string): string {
 	const q = path.indexOf("?");
 	return q === -1 ? path : path.slice(0, q);
@@ -280,7 +308,7 @@ export function toGtmApiError(input: {
 			message = withDetail(`No permission for ${resource}. Check the Google account has access.`, detail);
 			break;
 		case "notFound":
-			message = withDetail(`Not found: ${resource}. Check the account/container/workspace IDs.`, detail);
+			message = withDetail(`Not found: ${resource}. ${notFoundHint(resource)}`, detail);
 			break;
 		case "conflict":
 			message = withDetail(MESSAGES.conflict, detail);

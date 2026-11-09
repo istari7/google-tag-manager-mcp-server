@@ -76,13 +76,13 @@ Groups marked *optional* are off unless you enable them.
 | | `auth_status` | Shows the signed-in email, granted scopes and token expiry (never the tokens) | read |
 | `accounts` | `list_accounts` | Lists the GTM accounts you can access | read |
 | | `get_account` | Gets an account's settings (name, data sharing, features) | read |
-| | `update_account` | Renames an account or changes its data sharing | admin |
+| | `update_account` | Renames an account or changes its data sharing; the preview shows before and after | destructive |
 | | `list_containers` | Lists the containers in an account | read |
-| | `lookup_container` | Finds a container by its public ID (`GTM-XXXXXXX`) | read |
-| | `get_container_snippet` | Returns the container's install snippet | read |
-| | `delete_container` | Deletes a container for good; needs `confirm: true` and its public ID typed back | destructive |
+| | `lookup_container` | Finds a container by its public ID (`GTM-XXXXXXX`); an error if there is none | read |
+| | `get_container_snippet` | Returns the container's install code: the `<head>` script and the `<noscript>` body part | read |
+| | `delete_container` | Deletes a container for good; needs `confirm: true` and its public ID typed back by you (the preview masks it) | destructive |
 | `workspaces` | `list_workspaces` | Lists a container's workspaces | read |
-| | `create_workspace` | Creates a workspace (containers allow only a few) | write |
+| | `create_workspace` | Creates a workspace (containers allow only a few); it starts from the latest saved version, which may not be the live one | write |
 | | `delete_workspace` | Deletes a workspace and its unversioned changes; the preview counts them | destructive |
 | | `get_workspace_status` | Shows pending changes and merge conflicts | read |
 | | `quick_preview_workspace` | Checks a workspace compiles by building a throwaway preview; saves and publishes nothing | read |
@@ -91,14 +91,14 @@ Groups marked *optional* are off unless you enable them.
 | | `get_live_version` | Gets the currently published version | read |
 | | `list_versions` | Lists container versions | read |
 | `tags` | `list_tags`, `get_tag` | Lists tags / gets one tag in full | read |
-| | `create_tag`, `update_tag` | Creates a tag / changes some fields of a tag (other fields are kept) | write |
+| | `create_tag`, `update_tag` | Creates a tag / changes some fields of a tag (other fields are kept); for GA4, Google Ads and Floodlight tags, also reports the Google tag and configs GTM adds by itself | write |
 | | `delete_tag` | Deletes a tag; the preview shows the tag | destructive |
 | `triggers` | `list_triggers`, `get_trigger` | Lists triggers / gets one trigger in full | read |
 | | `create_trigger`, `update_trigger` | Creates a trigger / changes some fields of a trigger, fixing known API pitfalls in its conditions | write |
-| | `delete_trigger` | Deletes a trigger; the preview also lists the tags that use it | destructive |
+| | `delete_trigger` | Deletes a trigger; the preview lists the tags and trigger groups that use it (GTM refuses the delete until they stop) | destructive |
 | `variables` | `list_variables`, `get_variable` | Lists variables / gets one variable in full | read |
 | | `create_variable`, `update_variable` | Creates a variable / changes some fields of a variable | write |
-| | `delete_variable` | Deletes a variable; the preview shows the variable | destructive |
+| | `delete_variable` | Deletes a variable; the preview lists the tags, triggers and variables that use it as `{{name}}` (GTM refuses the delete until they stop) | destructive |
 | `builtins` | `list_built_in_variables` | Lists the enabled built-in variables | read |
 | | `enable_built_in_variables` | Enables built-in variables (Page URL, Click ID, …) | write |
 | | `disable_built_in_variables` | Disables built-in variables; the preview skips ones that are not enabled | destructive |
@@ -171,7 +171,7 @@ an account (the API has no such method).
 - **Per-client consent.** Each MCP client must be approved on a consent page before the Google
   sign-in. The approval is remembered in that browser for 30 days.
 - **`confirm: true`** is required by every *destructive* tool: the `delete_*` tools,
-  `disable_built_in_variables`, `set_user_permission` and `publish_version`. Without it they only
+  `disable_built_in_variables`, `set_user_permission`, `update_account` and `publish_version`. Without it they only
   describe what would happen. `delete_container` also needs the container's public ID, and the
   user-access tools warn when the change is to your own access.
 - **No lost edits.** GTM updates replace the whole object. Update tools read the current entity,
@@ -334,9 +334,10 @@ The Worker asks Google for `openid email profile` (to identify you) plus the sco
 - The Tag Manager API allows 10,000 requests a day per Google Cloud project, plus a low per-user
   rate limit (see APIs & Services › Tag Manager API › Quotas). Your project, your quota.
 - An update costs 2 API calls (read, then write). `create_version` costs 2 (status check, then
-  create). Previews are reads: 1 call for a delete (`delete_trigger` also reads the tag list,
-  `delete_workspace` the workspace status), 2 for `publish_version` (the version and the live
-  one). A confirmed `delete_container` costs 2 (it re-reads the public ID). The server retries rate-limit errors with backoff.
+  create). Previews are reads: 1 call for a delete (`delete_trigger` also reads the tag and
+  trigger lists, `delete_variable` the tag, trigger and variable lists, `delete_workspace` the
+  workspace status), 2 for `publish_version` (the version and the live one). Creating a GA4,
+  Google Ads or Floodlight tag costs 2 more calls (the workspace status before and after). A confirmed `delete_container` costs 2 (it re-reads the public ID). The server retries rate-limit errors with backoff.
 
 ## The 7-day sign-in problem
 

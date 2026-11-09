@@ -75,7 +75,7 @@ describe("get_tag", () => {
 		const result = await callTool("get_tag", { ...WORKSPACE_ARGS, tagId: "99" });
 		expect(result).toMatchObject({
 			isError: true,
-			text: `Not found: ${WORKSPACE}/tags/99. Check the account/container/workspace IDs.`,
+			text: `Not found: ${WORKSPACE}/tags/99. Check the tag ID, then the account/container/workspace IDs.`,
 		});
 	});
 });

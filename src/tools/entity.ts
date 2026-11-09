@@ -21,6 +21,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import type { z } from "zod";
 import type { GtmClient } from "../gtm/client";
+import { GtmApiError, GtmInputError } from "../gtm/errors";
 import { workspacePath } from "../gtm/paths";
 import type { ToolContext } from "../mcp/context";
 import type { ToolRegistry } from "../mcp/registry";
@@ -95,13 +96,18 @@ export function addGetTool<S extends z.ZodObject, T, P extends { nextPageToken?:
 export interface DeleteToolText<S extends z.ZodObject, T> extends ToolText {
 	/** Extra read-only facts for the preview, e.g. which tags use a trigger. */
 	related?: (ids: z.output<S>, ctx: ToolContext, entity: T) => Promise<Record<string, unknown>>;
+	/**
+	 * After GTM refused the confirmed DELETE with a 400: the error message to return instead
+	 * of Google's bare one, e.g. what still uses the entity (Q26).
+	 */
+	rejected?: (ids: z.output<S>, ctx: ToolContext) => Promise<string>;
 }
 
 /** delete_*: confirm-gated (deleteWithConfirm in ./confirm.ts). */
 export function addDeleteTool<S extends z.ZodObject, T, P extends { nextPageToken?: string }>(
 	tools: ToolRegistry,
 	entity: WorkspaceEntity<S, T, P>,
-	{ name, description, related }: DeleteToolText<S, T>,
+	{ name, description, related, rejected }: DeleteToolText<S, T>,
 ): void {
 	tools.add(
 		name,
@@ -124,7 +130,15 @@ export function addDeleteTool<S extends z.ZodObject, T, P extends { nextPageToke
 				get: () => entity.api.get(ctx.gtm, { path }),
 				summarize: entity.row,
 				related: related && ((found) => related(ids, ctx, found)),
-				remove: () => entity.api.delete(ctx.gtm, { path }),
+				remove: async () => {
+					try {
+						await entity.api.delete(ctx.gtm, { path });
+					} catch (error) {
+						if (!rejected || !(error instanceof GtmApiError) || error.kind !== "invalid") throw error;
+						// If explaining fails too, Google's own error is still the best answer.
+						throw new GtmInputError(await rejected(ids, ctx).catch(() => error.message));
+					}
+				},
 			});
 		},
 	);

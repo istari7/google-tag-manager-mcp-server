@@ -5,7 +5,7 @@ import { type Account, accounts, type Container } from "../gtm/generated";
 import { updateAccount } from "../gtm/merge";
 import { accountPath, containerPath, isGtmId, isPublicContainerId } from "../gtm/paths";
 import type { ToolGroup } from "../mcp/registry";
-import { fail, ok, okEntity, okList } from "../mcp/result";
+import { compact, fail, ok, okEntity, okList } from "../mcp/result";
 import { confirmGate, okPreview } from "./confirm";
 import { accountInput, confirmInput, containerInput, fingerprintInput, NO_INPUT } from "./inputs";
 import { isEmptyPatch, okWrite } from "./write";
@@ -41,7 +41,8 @@ function accountSummary(a: Account) {
 	return {
 		accountId: a.accountId,
 		name: a.name,
-		shareData: a.shareData,
+		// Google omits shareData when it is false; say so rather than leave it out.
+		shareData: a.shareData ?? false,
 		features: a.features,
 		fingerprint: a.fingerprint,
 	};
@@ -60,6 +61,24 @@ function containerSummary(c: Container) {
 		tagIds: c.tagIds,
 		taggingServerUrls: c.taggingServerUrls,
 	};
+}
+
+/**
+ * The <body> part of a web container's install code. Google's snippet endpoint returns only
+ * the <head> script, so build Google's standard <noscript> iframe from the ID in it.
+ */
+export function noscriptSnippet(snippet: string | undefined): string | undefined {
+	const id = snippet?.match(/GTM-[A-Z0-9]+/)?.[0];
+	if (!id || snippet?.includes("<noscript")) return undefined;
+	return `<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=${id}" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>`;
+}
+
+/** "GTM-5GMJXB83" →"GTM-******83": enough for the user to recognise, not enough to copy. */
+export function maskPublicId(publicId: string | undefined): string | undefined {
+	if (!publicId) return undefined;
+	const start = publicId.indexOf("-") + 1;
+	const end = Math.max(start, publicId.length - 2);
+	return `${publicId.slice(0, start)}${"*".repeat(end - start)}${publicId.slice(end)}`;
 }
 
 /**
@@ -135,23 +154,43 @@ export const accountTools: ToolGroup = (tools) => {
 	tools.add(
 		"update_account",
 		{
-			description: "Rename a GTM account or change its data-sharing setting. Takes effect immediately (not versioned).",
+			description:
+				"Rename a GTM account or change its data-sharing setting. Takes effect immediately (not versioned). Without confirm: true, only previews.",
 			input: accountInput.extend({
 				name: z.string().trim().min(1).max(256).optional().describe("New account name"),
 				shareData: z.boolean().optional().describe("Share data anonymously with Google (benchmarking)"),
 				fingerprint: fingerprintInput,
+				confirm: confirmInput("apply the change"),
 			}),
-			annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+			annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 		},
-		async ({ name, shareData, fingerprint, ...ids }, { gtm }) => {
+		async ({ name, shareData, fingerprint, confirm, ...ids }, { gtm }) => {
 			if (isEmptyPatch({ name, shareData })) return fail("Nothing to change: pass name and/or shareData.");
-			const { result } = await updateAccount(
-				gtm,
-				accountPath(ids),
-				{ name, shareData },
-				{ expectedFingerprint: fingerprint },
-			);
-			return okWrite({ account: accountSummary(result) }, { note: ACCOUNT_SETTINGS_NOTE });
+			const path = accountPath(ids);
+			return confirmGate({
+				confirm,
+				preview: async () => {
+					const current = await accounts.get(gtm, { path });
+					if (fingerprint !== undefined && fingerprint !== current.fingerprint) throw GtmApiError.conflict("PUT", path);
+					const before = accountSummary(current);
+					const after = { ...before, ...compact({ name, shareData }) };
+					if (before.name === after.name && before.shareData === after.shareData) {
+						return fail("Nothing to change: the account already has these settings.");
+					}
+					return okPreview(
+						{
+							before: { name: before.name, shareData: before.shareData },
+							after: { name: after.name, shareData: after.shareData },
+							fingerprint: current.fingerprint,
+						},
+						`Nothing was changed. ${ACCOUNT_SETTINGS_NOTE} Show the user this change, get their go-ahead, then call update_account again with the same fields, fingerprint: "${current.fingerprint ?? ""}" and confirm: true.`,
+					);
+				},
+				apply: async () => {
+					const { result } = await updateAccount(gtm, path, { name, shareData }, { expectedFingerprint: fingerprint });
+					return okWrite({ account: accountSummary(result) }, { note: ACCOUNT_SETTINGS_NOTE });
+				},
+			});
 		},
 	);
 
@@ -181,9 +220,9 @@ export const accountTools: ToolGroup = (tools) => {
 		},
 		async ({ publicId }, { gtm }) => {
 			const container = await lookupContainer(gtm, publicId);
-			if (!container) return ok(`No container with public ID ${publicId} in the accounts this user can access.`);
+			if (!container) return fail(`No container with public ID ${publicId} in the accounts this user can access.`);
 			if (container === "incomplete") {
-				return ok(
+				return fail(
 					`${publicId} was not found by Google's lookup, and the scan of every account stopped at its limit of ${LOOKUP_MAX_CALLS} API calls before checking them all. Use list_accounts, then list_containers with a specific accountId to find it.`,
 				);
 			}
@@ -198,7 +237,16 @@ export const accountTools: ToolGroup = (tools) => {
 			input: containerInput,
 			annotations: { readOnlyHint: true },
 		},
-		async (ids, { gtm }) => okEntity(await accounts.containers.snippet(gtm, { path: containerPath(ids) })),
+		async (ids, { gtm }) => {
+			const response = await accounts.containers.snippet(gtm, { path: containerPath(ids) });
+			const noscript = noscriptSnippet(response.snippet);
+			return okEntity({
+				...response,
+				...(noscript
+					? { noscript, install: "Put snippet high in <head>, and noscript right after the opening <body> tag." }
+					: {}),
+			});
+		},
 	);
 
 	tools.add(
@@ -207,7 +255,10 @@ export const accountTools: ToolGroup = (tools) => {
 			description:
 				"Permanently delete a container. Without confirm: true, only previews. Needs the user's explicit go-ahead and the container's public ID (GTM-XXXX).",
 			input: containerInput.extend({
-				publicId: z.string().optional().describe("The container's public ID (GTM-XXXX); required with confirm: true"),
+				publicId: z
+					.string()
+					.optional()
+					.describe("The public ID (GTM-XXXX) as typed by the user; required with confirm: true"),
 				confirm: confirmInput("delete the container"),
 			}),
 			annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
@@ -216,18 +267,21 @@ export const accountTools: ToolGroup = (tools) => {
 			const path = containerPath(ids);
 			const container = await accounts.containers.get(gtm, { path });
 			const expected = container.publicId;
+			// The public ID must come from the user (CLAUDE.md), so neither the preview nor the
+			// refusal spells it out: the model would just copy it into the confirmed call.
+			const { publicId: _publicId, tagIds: _tagIds, ...shown } = containerSummary(container);
 			return confirmGate({
 				confirm,
 				preview: () =>
 					okPreview(
-						{ wouldDelete: { kind: "container", ...containerSummary(container) } },
-						`Nothing was deleted. Deleting a container removes its workspaces and versions, and sites that load ${expected ?? "it"} stop getting its tags. Get the user's explicit go-ahead, then call delete_container again with confirm: true and publicId: "${expected ?? ""}".`,
+						{ wouldDelete: compact({ kind: "container", ...shown, publicIdMasked: maskPublicId(expected) }) },
+						`Nothing was deleted. Deleting a container removes its workspaces and versions, and every site that loads it stops getting its tags. Show the user the container name, ask them to type its public ID (GTM-…) themselves, and don't fill it in for them. Then call delete_container again with confirm: true and publicId set to what the user typed.`,
 					),
 				apply: async () => {
 					// The public ID typed back (CLAUDE.md): proof the user means this container.
 					if (!expected || publicId?.trim().toUpperCase() !== expected.toUpperCase()) {
 						return fail(
-							`Nothing was deleted: publicId must be "${expected ?? "?"}", the public ID of container ${ids.containerId}.`,
+							`Nothing was deleted: publicId does not match the public ID of container ${ids.containerId}. Ask the user to type it.`,
 						);
 					}
 					await accounts.containers.delete(gtm, { path });
