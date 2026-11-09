@@ -13,6 +13,8 @@ import { TEST_SECRETS } from "./helpers/secrets";
 const PUBLISH = "https://www.googleapis.com/auth/tagmanager.publish";
 const DELETE_CONTAINERS = "https://www.googleapis.com/auth/tagmanager.delete.containers";
 const READONLY = "https://www.googleapis.com/auth/tagmanager.readonly";
+const MANAGE_ACCOUNTS = "https://www.googleapis.com/auth/tagmanager.manage.accounts";
+const MANAGE_USERS = "https://www.googleapis.com/auth/tagmanager.manage.users";
 
 /** Calls the auth handler directly with some env values replaced. */
 async function setupWith(overrides: Partial<Record<keyof Env, string>>, url = `${ORIGIN}/setup`): Promise<string> {
@@ -175,13 +177,17 @@ describe("/setup URLs and client snippets", () => {
 		expect(html).toContain("Add custom connector");
 	});
 
-	it("names the tools that fail when tagmanager.publish or delete.containers is missing", async () => {
+	it("names the tools that fail when an optional scope is missing", async () => {
 		const without = await setupWith({ GOOGLE_SCOPES: READONLY });
 		expect(without).toContain(`Without <code>${PUBLISH}</code>, publish_version will fail`);
 		expect(without).toContain(
 			`Without <code>${DELETE_CONTAINERS}</code>, delete_workspace and delete_container will fail`,
 		);
-		const html = await setupWith({ GOOGLE_SCOPES: `${READONLY} ${PUBLISH} ${DELETE_CONTAINERS}` });
+		expect(without).toContain(`Without <code>${MANAGE_ACCOUNTS}</code>, get_account and update_account will fail`);
+		expect(without).toContain(`Without <code>${MANAGE_USERS}</code>, list_user_permissions,`);
+		const html = await setupWith({
+			GOOGLE_SCOPES: `${READONLY} ${PUBLISH} ${DELETE_CONTAINERS} ${MANAGE_ACCOUNTS} ${MANAGE_USERS}`,
+		});
 		expect(html).not.toContain("Without <code>");
 	});
 

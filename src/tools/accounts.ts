@@ -1,11 +1,13 @@
 import { z } from "zod";
 import { DEFAULT_MAX_PAGES, type GtmClient } from "../gtm/client";
 import { GtmApiError } from "../gtm/errors";
-import { accounts, type Container } from "../gtm/generated";
+import { type Account, accounts, type Container } from "../gtm/generated";
+import { updateAccount } from "../gtm/merge";
 import { accountPath, containerPath, isGtmId, isPublicContainerId } from "../gtm/paths";
 import type { ToolGroup } from "../mcp/registry";
 import { fail, ok, okEntity, okList } from "../mcp/result";
-import { accountInput, confirmInput, containerInput, NO_INPUT } from "./inputs";
+import { accountInput, confirmInput, containerInput, fingerprintInput, NO_INPUT } from "./inputs";
+import { isEmptyPatch, okWrite } from "./write";
 
 const lookupInput = z.object({
 	publicId: z
@@ -31,6 +33,20 @@ function listContainers(gtm: GtmClient, accountId: string) {
 }
 
 /** What a model needs to know about a container; drops `features`, fingerprint and UI links. */
+/** Account settings are not versioned: an update applies at once, with no workspace or publish step. */
+export const ACCOUNT_SETTINGS_NOTE =
+	"Account settings take effect immediately; they are not part of any workspace or version.";
+
+function accountSummary(a: Account) {
+	return {
+		accountId: a.accountId,
+		name: a.name,
+		shareData: a.shareData,
+		features: a.features,
+		fingerprint: a.fingerprint,
+	};
+}
+
 function containerSummary(c: Container) {
 	return {
 		accountId: c.accountId,
@@ -101,6 +117,40 @@ export const accountTools: ToolGroup = (tools) => {
 			const list = await listAccounts(gtm);
 			if (list.items.length === 0) return ok("No GTM accounts found for this Google user.");
 			return okList("accounts", list, (a) => ({ accountId: a.accountId, name: a.name }));
+		},
+	);
+
+	tools.add(
+		"get_account",
+		{
+			description:
+				"Get a GTM account's settings: name, data sharing and features, plus its fingerprint for update_account.",
+			input: accountInput,
+			annotations: { readOnlyHint: true },
+		},
+		async (ids, { gtm }) => okEntity(accountSummary(await accounts.get(gtm, { path: accountPath(ids) }))),
+	);
+
+	tools.add(
+		"update_account",
+		{
+			description: "Rename a GTM account or change its data-sharing setting. Takes effect immediately (not versioned).",
+			input: accountInput.extend({
+				name: z.string().trim().min(1).max(256).optional().describe("New account name"),
+				shareData: z.boolean().optional().describe("Share data anonymously with Google (benchmarking)"),
+				fingerprint: fingerprintInput,
+			}),
+			annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+		},
+		async ({ name, shareData, fingerprint, ...ids }, { gtm }) => {
+			if (isEmptyPatch({ name, shareData })) return fail("Nothing to change: pass name and/or shareData.");
+			const { result } = await updateAccount(
+				gtm,
+				accountPath(ids),
+				{ name, shareData },
+				{ expectedFingerprint: fingerprint },
+			);
+			return okWrite({ account: accountSummary(result) }, { note: ACCOUNT_SETTINGS_NOTE });
 		},
 	);
 

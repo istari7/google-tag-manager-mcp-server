@@ -11,7 +11,7 @@
 
 import type { GtmRequester } from "./client";
 import { GtmApiError } from "./errors";
-import { accounts, type Folder, type Tag, type Trigger, type Variable } from "./generated";
+import { type Account, accounts, type Folder, type Tag, type Trigger, type Variable } from "./generated";
 import {
 	type Normalized,
 	normalizeTag,
@@ -140,6 +140,22 @@ export function updateFolder(client: GtmRequester, path: string, patch: Partial<
 		expectedFingerprint: options.expectedFingerprint,
 		get: () => ws.folders.get(client, { path }),
 		put: (body, fingerprint) => ws.folders.update(client, { path, fingerprint }, body),
+		normalize: plain,
+	});
+}
+
+export function updateAccount(
+	client: GtmRequester,
+	path: string,
+	patch: Partial<Account>,
+	options: UpdateOptions = {},
+) {
+	return getMergePut<Account, Partial<Account>>({
+		path,
+		patch,
+		expectedFingerprint: options.expectedFingerprint,
+		get: () => accounts.get(client, { path }),
+		put: (body, fingerprint) => accounts.update(client, { path, fingerprint }, body),
 		normalize: plain,
 	});
 }

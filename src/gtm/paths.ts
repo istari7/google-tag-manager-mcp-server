@@ -49,6 +49,9 @@ export interface FolderIds extends WorkspaceIds {
 export interface VersionIds extends ContainerIds {
 	versionId: string;
 }
+export interface GtagConfigIds extends WorkspaceIds {
+	gtagConfigId: string;
+}
 
 export function accountPath(ids: AccountIds): string {
 	return `accounts/${assertGtmId("accountId", ids.accountId)}`;
@@ -82,6 +85,10 @@ export function folderPath(ids: FolderIds): string {
 /** Path used by built_in_variables create/delete/revert (`{workspace}/built_in_variables`). */
 export function builtInVariablesPath(ids: WorkspaceIds): string {
 	return `${workspacePath(ids)}/built_in_variables`;
+}
+
+export function gtagConfigPath(ids: GtagConfigIds): string {
+	return `${workspacePath(ids)}/gtag_config/${assertGtmId("gtagConfigId", ids.gtagConfigId)}`;
 }
 
 export function versionPath(ids: VersionIds): string {

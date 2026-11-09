@@ -19,6 +19,9 @@ const SCOPE_LABELS: Record<string, string> = {
 const OPTIONAL_SCOPES: Record<string, string> = {
 	"https://www.googleapis.com/auth/tagmanager.publish": "publish_version",
 	"https://www.googleapis.com/auth/tagmanager.delete.containers": "delete_workspace and delete_container",
+	"https://www.googleapis.com/auth/tagmanager.manage.accounts": "get_account and update_account",
+	"https://www.googleapis.com/auth/tagmanager.manage.users":
+		"list_user_permissions, set_user_permission and delete_user_permission",
 };
 
 const STYLE = `
