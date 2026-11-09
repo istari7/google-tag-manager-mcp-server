@@ -28,6 +28,10 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # skills/ and docs/best-practices/ frontmatter must match src/skills/generated.ts.
+      - name: Skills manifest
+        run: pnpm gen:skills --check
+
       - name: Typecheck
         run: pnpm typecheck
 

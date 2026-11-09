@@ -1,3 +1,9 @@
+---
+title: "Naming and organisation"
+description: "How to name tags, triggers and variables, when to use folders, and what counts as clutter."
+order: 20
+---
+
 # Naming and organisation
 
 Someone scanning the container list should know what each entity does

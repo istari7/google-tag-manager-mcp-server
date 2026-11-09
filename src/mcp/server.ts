@@ -36,6 +36,9 @@ import { createMcpHandler } from "agents/mcp";
 import { version } from "../../package.json";
 import type { Env, Props } from "../env";
 import { registerBestPractices } from "../resources/best-practices";
+import { registerSkillResources } from "../resources/skills";
+import { SERVER_INSTRUCTIONS } from "../skills/instructions";
+import { registerSkillPrompts } from "../skills/prompts";
 import { toolModulesFor } from "../tools";
 import { parseToolGroups, type ToolGroupSelection, ToolGroupsError } from "../tools/groups";
 import { createToolContext, type ToolContext } from "./context";
@@ -49,10 +52,13 @@ export function buildServer(
 	ctx: ToolContext,
 	groups: ToolGroupSelection = parseToolGroups(ctx.env.GTM_TOOL_GROUPS),
 ): McpServer {
-	const server = new McpServer(SERVER_INFO);
+	const server = new McpServer(SERVER_INFO, { instructions: SERVER_INSTRUCTIONS });
 	const tools = toolRegistry(server, ctx);
 	for (const register of toolModulesFor(groups)) register(tools);
 	registerBestPractices(server);
+	// Skills: skills/<name>/SKILL.md → gtm://skills/<name> + prompt <name> (pnpm gen:skills).
+	registerSkillResources(server);
+	registerSkillPrompts(server, ctx);
 	return server;
 }
 

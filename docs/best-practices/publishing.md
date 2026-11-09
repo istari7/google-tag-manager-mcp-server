@@ -1,3 +1,9 @@
+---
+title: "Publishing workflow and safety"
+description: "The life of a change: workspace, review, version, and publish only on the user's explicit go-ahead. How to undo a bad release."
+order: 10
+---
+
 # Publishing workflow and safety
 
 A change moves through five stages: **workspace → review → version → review

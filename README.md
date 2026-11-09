@@ -30,6 +30,7 @@ the GTM client is generated from Google's Discovery document.
 - [Tools](#tools)
   - [Tool groups](#tool-groups)
 - [Publishing and deleting](#publishing-and-deleting)
+- [Skills and prompts](#skills-and-prompts)
 - [Safety model](#safety-model)
 - [Deploy](#deploy)
 - [Connect a client](#connect-a-client)
@@ -162,6 +163,71 @@ They need the `tagmanager.publish` and `tagmanager.delete.containers` scopes. If
 allow them, leave those scopes out of `GOOGLE_SCOPES` and the consent screen: the tools then fail
 with a permission error, and `/setup` lists which tools are affected. There is no tool to delete
 an account (the API has no such method).
+
+## Skills and prompts
+
+Besides tools, the server ships guidance the AI can load when it needs it. None of it counts
+against the `tools/list` budget.
+
+| What | Over MCP | Source |
+|---|---|---|
+| Best practices | Resources `gtm://best-practices` (index) and `gtm://best-practices/{topic}` | `docs/best-practices/*.md` |
+| Skills | Resources `gtm://skills` (index) and `gtm://skills/{name}`, plus one prompt per skill | `skills/<name>/SKILL.md` |
+| Server instructions | Sent at `initialize`; point the AI at both resource trees | Built from the files above |
+| `GET /llms.txt` | Public plain-text overview of the server, its skills and topics | Built from the files above |
+
+| Skill (= prompt) | What it does | Prompt arguments |
+|---|---|---|
+| `gtm-mcp` | How to use this server: IDs, build order, review, versions, confirm-gated tools | none |
+| `audit-container` | Finds problems in a workspace and proposes a fix for each | `accountId`, `containerId`, `workspaceId` (optional) |
+| `best-practices-review` | Scores a workspace pass / warn / fail per best-practice area | `accountId`, `containerId`, `workspaceId` (optional) |
+| `generate-tracking-plan` | Writes a Markdown tracking plan for a workspace | `accountId`, `containerId`, `workspaceId` (optional) |
+| `plan-safe-edit` | Turns a change request into a step-by-step plan to approve | `change`; `accountId`, `containerId` (optional) |
+| `suggest-ga4-setup` | Designs GA4 tags, triggers, variables and data layer pushes | `goals` |
+| `find-gallery-template` | Finds a Community Template Gallery template and explains how to add it | `templateName` |
+
+A prompt is the skill's text plus the arguments you give it and the best-practice topics the
+skill relies on. When a prompt that takes IDs gets them, it also reads the workspace (tags,
+triggers, variables, folders) or the container (its workspaces) as you and includes a compact
+summary, so the AI starts with the data. Without IDs it tells the AI how to find them. In Claude
+Code the prompts appear as `/mcp__gtm__<name>`.
+
+The skill files use the Agent Skills layout (a folder with a `SKILL.md` that has `name` and
+`description` frontmatter), so you can also copy a `skills/<name>/` folder into `.claude/skills/`
+to use it as a local Claude Code skill. The live data only comes with the MCP prompt.
+
+### Adding a skill or a best-practice topic
+
+1. Create `skills/<name>/SKILL.md` (or `docs/best-practices/<topic>.md`) with YAML frontmatter:
+
+   ```yaml
+   ---
+   name: my-skill            # must equal the folder name: lowercase letters, digits, hyphens
+   title: My skill           # optional
+   description: One or two sentences, shown in resource and prompt lists.
+   arguments:                # optional prompt arguments (always strings)
+     - name: goal
+       description: What the user wants
+       required: true
+   live-data: workspace      # optional: workspace | container. Adds the ID arguments and live data
+   include: [naming, tags]   # optional: best-practice topics added to the prompt
+   tags: [audit]             # optional; skills tagged "guide" are included in full in /llms.txt
+   order: 50                 # optional list position (default 100), then by name
+   license: ...              # optional; attribution for adapted material
+   ---
+
+   # My skill
+
+   The instructions, in Markdown.
+   ```
+
+   A best-practice topic takes only `title`, `description` and `order`; its file name is its
+   name. `docs/best-practices/index.md` lists the topics where it says `{{topics}}`.
+2. Run `pnpm gen:skills`. It validates the frontmatter and rewrites `src/skills/generated.ts`
+   (never edit that file by hand). `pnpm test` and CI fail when the file is stale.
+3. Deploy. Workers have no file system at runtime, so the files are bundled at build time.
+
+Editing only the Markdown body of an existing file needs no regeneration.
 
 ## Safety model
 
@@ -365,6 +431,7 @@ Requires Node.js 24 and pnpm (version pinned in `package.json`).
 | `pnpm typecheck` | `tsc --noEmit` |
 | `pnpm lint` / `pnpm format` | Biome check / check with fixes |
 | `pnpm gen` | Regenerate `src/gtm/generated.ts` from Google's Discovery document |
+| `pnpm gen:skills` | Regenerate `src/skills/generated.ts` after adding a skill or best-practice file or changing frontmatter (`--check` to verify) |
 | `pnpm cf-typegen` | Regenerate `worker-configuration.d.ts` after changing `wrangler.jsonc` |
 | `pnpm tools-report` | Size of the `tools/list` response per tool group, for the default groups and for `all` |
 | `pnpm run deploy` | Deploy to your Cloudflare account |
@@ -381,4 +448,6 @@ Google Tag Manager is a trademark of Google LLC. This project is not affiliated 
 
 ## License
 
-BSD 3-Clause. See [LICENSE](LICENSE).
+BSD 3-Clause. See [LICENSE](LICENSE). The skills adapt material from
+[gtm-mcp-server](https://github.com/paolobietolini/gtm-mcp-server) by Paolo Bietolini
+(BSD 3-Clause); see [NOTICE](NOTICE).
