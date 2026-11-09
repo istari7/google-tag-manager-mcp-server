@@ -389,8 +389,8 @@ Add an entry whenever manual testing turns up something new, with a test.
   `tags` best-practices topic also tells the model to point the Google tag out
   to the user. To clean up, delete the auto-created Google tag with
   `delete_tag` and the leftover configs (seen live: `ogt_auto_events`,
-  `ogt_1p_data_v2`) with `list_gtag_configs` / `delete_gtag_config`; that
-  leaves the workspace with no trace (confirmed live, 2026-11-09).
+  `ogt_1p_data_v2`) with `list_google_tag_configs` /
+  `delete_google_tag_config`; that leaves the workspace with no trace (confirmed live, 2026-11-09).
 - **Tests:** tools/tags: `Q23 GTM's own Google tag and gtagConfigs` (the
   status reads, the reported entities and warning, html skips the reads, a
   failed status read); tools/gtag-configs (requests and confirm gating).

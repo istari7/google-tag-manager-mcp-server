@@ -106,8 +106,15 @@ describe("tools per configuration", () => {
 		]);
 	});
 
-	it("a group with no tools yet lists only the core tools", async () => {
-		expect(await toolNames("zones")).toEqual(CORE);
+	it("an optional group adds only its own tools", async () => {
+		expect(await toolNames("zones")).toEqual([
+			...CORE,
+			"list_zones",
+			"get_zone",
+			"create_zone",
+			"update_zone",
+			"delete_zone",
+		]);
 	});
 
 	it("the default leaves out the optional groups", async () => {

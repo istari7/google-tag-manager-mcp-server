@@ -84,7 +84,7 @@ someone else edited it: read it again and redo your change.
 ## Confirm-gated tools
 
 `delete_tag`, `delete_trigger`, `delete_variable`, `delete_folder`,
-`delete_gtag_config`, `delete_workspace`, `delete_container`,
+`delete_google_tag_config`, `delete_workspace`, `delete_container`,
 `disable_built_in_variables`, `set_user_permission`,
 `delete_user_permission` and `publish_version` change nothing without
 `confirm: true`. Call them without it, show the user the preview, and confirm

@@ -52,6 +52,15 @@ export interface VersionIds extends ContainerIds {
 export interface GtagConfigIds extends WorkspaceIds {
 	gtagConfigId: string;
 }
+export interface ZoneIds extends WorkspaceIds {
+	zoneId: string;
+}
+export interface EnvironmentIds extends ContainerIds {
+	environmentId: string;
+}
+export interface DestinationIds extends ContainerIds {
+	destinationLinkId: string;
+}
 
 export function accountPath(ids: AccountIds): string {
 	return `accounts/${assertGtmId("accountId", ids.accountId)}`;
@@ -89,6 +98,31 @@ export function builtInVariablesPath(ids: WorkspaceIds): string {
 
 export function gtagConfigPath(ids: GtagConfigIds): string {
 	return `${workspacePath(ids)}/gtag_config/${assertGtmId("gtagConfigId", ids.gtagConfigId)}`;
+}
+
+export function zonePath(ids: ZoneIds): string {
+	return `${workspacePath(ids)}/zones/${assertGtmId("zoneId", ids.zoneId)}`;
+}
+
+export function environmentPath(ids: EnvironmentIds): string {
+	return `${containerPath(ids)}/environments/${assertGtmId("environmentId", ids.environmentId)}`;
+}
+
+/**
+ * Destination link IDs and destination IDs ("G-ABC123", "AW-123") are not always numeric, so
+ * they get their own check: letters, digits, "_" and "-" only, so they can't reshape a path.
+ */
+const DESTINATION_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+export function isDestinationId(value: unknown): value is string {
+	return typeof value === "string" && DESTINATION_ID.test(value);
+}
+
+export function destinationPath(ids: DestinationIds): string {
+	if (!isDestinationId(ids.destinationLinkId)) {
+		throw new InvalidGtmIdError(`destinationLinkId is not a valid ID (got ${JSON.stringify(ids.destinationLinkId)}).`);
+	}
+	return `${containerPath(ids)}/destinations/${ids.destinationLinkId}`;
 }
 
 export function versionPath(ids: VersionIds): string {

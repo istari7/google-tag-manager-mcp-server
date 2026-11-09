@@ -150,7 +150,7 @@ describe("create_tag", () => {
 				{ kind: "gtagConfig", id: "81", type: "ogt_1p_data_v2", changeStatus: "added" },
 			]);
 			expect(out.warnings).toEqual([
-				"GTM also changed 3 other entities by itself (Q23, see alsoChangedByGtm), including 1 unpaused tag(s). They go live with this workspace when it is published. Tell the user; remove unwanted ones with delete_tag / delete_gtag_config.",
+				"GTM also changed 3 other entities by itself (Q23, see alsoChangedByGtm), including 1 unpaused tag(s). They go live with this workspace when it is published. Tell the user; remove unwanted ones with delete_tag / delete_google_tag_config.",
 			]);
 		});
 

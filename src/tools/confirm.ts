@@ -36,7 +36,7 @@ export function okPreview(fields: Record<string, unknown>, message: string): Cal
 
 export interface DeleteOptions<T> {
 	confirm: boolean | undefined;
-	/** The tool's own name, for the preview's "call … again" hint, e.g. "delete_gtag_config". */
+	/** The tool's own name, for the preview's "call … again" hint, e.g. "delete_google_tag_config". */
 	toolName: string;
 	/** Entity kind as describeEntity (./summaries.ts) names it, e.g. "tag", "gtagConfig". */
 	kind: string;

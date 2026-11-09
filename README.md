@@ -66,7 +66,8 @@ publishes a version, and needs `confirm: true` (without it, the tool returns a p
 would do). Workspace edits reach your site only when a version is published, but some tools act
 the moment they are confirmed: `publish_version` and `delete_container` change what your sites
 load, and `update_account`, `set_user_permission` and `delete_user_permission` change account
-settings or access, which are not versioned.
+settings or access, which are not versioned. Environment tools and `link_destination` also act at
+once, at container level.
 
 The **Group** column is the tool group that [`GTM_TOOL_GROUPS`](#tool-groups) switches on.
 Groups marked *optional* are off unless you enable them.
@@ -107,8 +108,19 @@ Groups marked *optional* are off unless you enable them.
 | `folder-admin` (optional) | `create_folder` | Creates a folder | write |
 | | `move_entities_to_folder` | Moves tags, triggers and variables into a folder (folder `0` = out of any folder) | write |
 | | `delete_folder` | Deletes a folder; the preview lists what is in it, which is kept | destructive |
-| `gtag` (optional) | `list_gtag_configs` | Lists the Google tag configs GTM creates with GA4, Ads and Floodlight tags | read |
-| | `delete_gtag_config` | Deletes a Google tag config, e.g. one left behind after its tag was deleted | destructive |
+| `zones` (optional, GTM 360) | `list_zones`, `get_zone` | Lists zones / gets one zone in full | read |
+| | `create_zone`, `update_zone` | Creates a zone / changes some fields of a zone (boundary conditions as a JSON string) | write |
+| | `delete_zone` | Deletes a zone; the preview shows the zone | destructive |
+| `gtag` (optional) | `list_google_tag_configs`, `get_google_tag_config` | Lists the Google tag configs GTM creates with GA4, Ads and Floodlight tags (type and tag ID) / gets one in full | read |
+| | `create_google_tag_config`, `update_google_tag_config` | Creates a Google tag config / changes its type or parameters | write |
+| | `delete_google_tag_config` | Deletes a Google tag config, e.g. one left behind after its tag was deleted | destructive |
+| `environments` (optional) | `list_environments`, `get_environment` | Lists a container's environments / gets one with its authorization code | read |
+| | `create_environment` | Creates a user environment (e.g. staging); applies immediately | admin |
+| | `update_environment` | Changes an environment; repointing it to another version or workspace needs `confirm: true` | destructive |
+| | `reauthorize_environment` | Issues a new authorization code; the old one stops working | destructive |
+| | `delete_environment` | Deletes a user environment; pages using its snippet stop loading it | destructive |
+| `destinations` (optional) | `list_destinations`, `get_destination` | Lists the Google tag destinations linked to a container / gets one | read |
+| | `link_destination` | Links a destination to this container, moving it from its current one | destructive |
 | `users` (optional) | `list_user_permissions` | Lists who can access an account and its containers | read |
 | | `set_user_permission` | Adds a user or changes their account / container access; the preview shows before and after | destructive |
 | | `delete_user_permission` | Removes a user from an account | destructive |

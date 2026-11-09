@@ -63,7 +63,7 @@ async function autoCreated(
 	return {
 		fields: { alsoChangedByGtm: extra },
 		warnings: [
-			`GTM also ${extra.length === 1 ? "changed 1 other entity" : `changed ${extra.length} other entities`} by itself (Q23, see alsoChangedByGtm)${activeTags > 0 ? `, including ${activeTags} unpaused tag(s)` : ""}. They go live with this workspace when it is published. Tell the user; remove unwanted ones with delete_tag / delete_gtag_config.`,
+			`GTM also ${extra.length === 1 ? "changed 1 other entity" : `changed ${extra.length} other entities`} by itself (Q23, see alsoChangedByGtm)${activeTags > 0 ? `, including ${activeTags} unpaused tag(s)` : ""}. They go live with this workspace when it is published. Tell the user; remove unwanted ones with delete_tag / delete_google_tag_config.`,
 		],
 	};
 }

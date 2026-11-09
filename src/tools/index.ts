@@ -10,6 +10,8 @@
 import type { ToolGroup } from "../mcp/registry";
 import { accountTools } from "./accounts";
 import { builtInTools } from "./builtins";
+import { destinationTools } from "./destinations";
+import { environmentTools } from "./environments";
 import { folderAdminTools, folderTools } from "./folders";
 import type { ToolGroupName, ToolGroupSelection } from "./groups";
 import { gtagConfigTools } from "./gtag-configs";
@@ -20,6 +22,7 @@ import { utilityTools } from "./utility";
 import { variableTools } from "./variables";
 import { versionTools } from "./versions";
 import { workspaceTools } from "./workspaces";
+import { zoneTools } from "./zones";
 
 export interface ToolModule {
 	group: ToolGroupName | "core";
@@ -37,8 +40,11 @@ export const TOOL_MODULES: readonly ToolModule[] = [
 	{ group: "builtins", register: builtInTools },
 	{ group: "folders", register: folderTools },
 	{ group: "folder-admin", register: folderAdminTools },
+	{ group: "zones", register: zoneTools },
 	{ group: "gtag", register: gtagConfigTools },
 	{ group: "workspaces", register: versionTools },
+	{ group: "environments", register: environmentTools },
+	{ group: "destinations", register: destinationTools },
 ];
 
 /** The modules to register for the selected groups, in tools/list order. */

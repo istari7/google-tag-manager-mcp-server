@@ -17,8 +17,19 @@ exports[`tools per configuration > puts every tool in exactly one group (or core
     "disable_built_in_variables",
   ],
   "container-admin": [],
-  "destinations": [],
-  "environments": [],
+  "destinations": [
+    "list_destinations",
+    "get_destination",
+    "link_destination",
+  ],
+  "environments": [
+    "list_environments",
+    "get_environment",
+    "create_environment",
+    "update_environment",
+    "reauthorize_environment",
+    "delete_environment",
+  ],
   "folder-admin": [
     "create_folder",
     "move_entities_to_folder",
@@ -28,8 +39,11 @@ exports[`tools per configuration > puts every tool in exactly one group (or core
     "list_folders",
   ],
   "gtag": [
-    "list_gtag_configs",
-    "delete_gtag_config",
+    "list_google_tag_configs",
+    "get_google_tag_config",
+    "create_google_tag_config",
+    "update_google_tag_config",
+    "delete_google_tag_config",
   ],
   "guidance": [],
   "reverts": [],
@@ -74,6 +88,12 @@ exports[`tools per configuration > puts every tool in exactly one group (or core
     "get_live_version",
     "list_versions",
   ],
-  "zones": [],
+  "zones": [
+    "list_zones",
+    "get_zone",
+    "create_zone",
+    "update_zone",
+    "delete_zone",
+  ],
 }
 `;
