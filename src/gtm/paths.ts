@@ -67,6 +67,9 @@ export interface ClientIds extends WorkspaceIds {
 export interface TransformationIds extends WorkspaceIds {
 	transformationId: string;
 }
+export interface TemplateIds extends WorkspaceIds {
+	templateId: string;
+}
 
 export function accountPath(ids: AccountIds): string {
 	return `accounts/${assertGtmId("accountId", ids.accountId)}`;
@@ -139,6 +142,10 @@ export function clientPath(ids: ClientIds): string {
 /** Server containers only. */
 export function transformationPath(ids: TransformationIds): string {
 	return `${workspacePath(ids)}/transformations/${assertGtmId("transformationId", ids.transformationId)}`;
+}
+
+export function templatePath(ids: TemplateIds): string {
+	return `${workspacePath(ids)}/templates/${assertGtmId("templateId", ids.templateId)}`;
 }
 
 export function versionPath(ids: VersionIds): string {

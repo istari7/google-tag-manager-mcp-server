@@ -90,10 +90,28 @@ describe("the bundled skills", () => {
 		expect(skill("gtm-mcp").text).toMatch(/Publish only when the user explicitly asks/);
 	});
 
-	it("name only tools this server has (no import_gallery_template or get_tag_templates)", () => {
-		for (const s of SKILLS) {
-			expect(s.text).not.toMatch(/import_gallery_template|get_tag_templates|get_trigger_templates|list_clients/);
+	it("name only tools this server has (skills, best practices and instructions)", async () => {
+		const { result } = await rpc("tools/list");
+		const tools = new Set((result as { tools: Array<{ name: string }> }).tools.map((t) => t.name));
+		// A snake_case word starting with a tool verb (list_, get_, delete_, …) is a tool reference;
+		// other snake_case words (event names like sign_up, consent types) start with other words.
+		const verbs = new Set([...tools].map((name) => name.split("_")[0]));
+		const texts = [
+			...SKILLS.map((s) => [`skill ${s.name}`, `${s.description}\n${s.text}`] as const),
+			...Object.entries(TOPICS).map(([name, t]) => [`best-practices/${name}`, t.text] as const),
+			["SERVER_INSTRUCTIONS", SERVER_INSTRUCTIONS] as const,
+		];
+		const stale: string[] = [];
+		let checked = 0;
+		for (const [where, text] of texts) {
+			for (const [word] of text.matchAll(/\b[a-z]+(?:_[a-z0-9]+)+\b/g)) {
+				if (!verbs.has(word.split("_")[0] ?? "")) continue;
+				checked++;
+				if (!tools.has(word)) stale.push(`${where}: ${word}`);
+			}
 		}
+		expect(stale).toEqual([]);
+		expect(checked).toBeGreaterThan(50);
 	});
 });
 

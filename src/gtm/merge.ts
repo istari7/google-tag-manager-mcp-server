@@ -7,11 +7,20 @@
 // Q2: The stored fingerprint goes in the `fingerprint` query parameter, never
 //     the body. If the caller read the entity earlier, it can pass that
 //     fingerprint as `expectedFingerprint` to catch edits made in between.
+//     Templates are the one exception (Q8, updateTemplate): body and query.
 // Q6: `uniqueTriggerId` is server-generated and never sent back.
 
 import type { GtmRequester } from "./client";
 import { GtmApiError } from "./errors";
-import { type Account, accounts, type Folder, type Tag, type Trigger, type Variable } from "./generated";
+import {
+	type Account,
+	accounts,
+	type CustomTemplate,
+	type Folder,
+	type Tag,
+	type Trigger,
+	type Variable,
+} from "./generated";
 import {
 	type Normalized,
 	normalizeTag,
@@ -140,6 +149,31 @@ export function updateFolder(client: GtmRequester, path: string, patch: Partial<
 		expectedFingerprint: options.expectedFingerprint,
 		get: () => ws.folders.get(client, { path }),
 		put: (body, fingerprint) => ws.folders.update(client, { path, fingerprint }, body),
+		normalize: plain,
+	});
+}
+
+/**
+ * Q8: it is unverified whether templates.update checks the fingerprint in the `?fingerprint=`
+ * query parameter (Discovery declares it, like every other update, Q2) or in the body (where
+ * Paolo's Go server sends it, without the query parameter). We send the stored fingerprint in
+ * both. They are the same value, so whichever one Google reads, an unchanged template is
+ * accepted and one changed since our GET is refused. The caller's own stale read is caught
+ * before any write by `expectedFingerprint`, as for every other update.
+ */
+export function updateTemplate(
+	client: GtmRequester,
+	path: string,
+	patch: Partial<CustomTemplate>,
+	options: UpdateOptions = {},
+) {
+	return getMergePut<CustomTemplate, Partial<CustomTemplate>>({
+		path,
+		patch,
+		expectedFingerprint: options.expectedFingerprint,
+		get: () => ws.templates.get(client, { path }),
+		put: (body, fingerprint) =>
+			ws.templates.update(client, { path, fingerprint }, fingerprint === undefined ? body : { ...body, fingerprint }),
 		normalize: plain,
 	});
 }

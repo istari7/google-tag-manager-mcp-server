@@ -109,7 +109,7 @@ export const SKILLS: readonly SkillEntry[] = [
 	{
 		name: "find-gallery-template",
 		title: "Find a Community Template Gallery template",
-		description: "Find a tag or variable template in the GTM Community Template Gallery (consent banners, ad pixels, …), check it before use, and walk the user through adding it. This server cannot import gallery templates itself.",
+		description: "Find a tag or variable template in the GTM Community Template Gallery (consent banners, ad pixels, …), check it before use, and import it with import_gallery_template.",
 		tags: ["templates", "gallery"],
 		arguments: [
 			{ name: "templateName", description: "The template or vendor to look for, e.g. \"Cookiebot\" or \"LinkedIn Insight\"", required: true },

@@ -105,6 +105,7 @@ Groups marked *optional* are off unless you enable them.
 | | `enable_built_in_variables` | Enables built-in variables (Page URL, Click ID, …) | write |
 | | `disable_built_in_variables` | Disables built-in variables; the preview skips ones that are not enabled | destructive |
 | `folders` | `list_folders` | Lists folders | read |
+| `guidance` | `get_tag_templates`, `get_trigger_templates` | Example `create_tag` / `create_trigger` arguments for common tag and trigger types (no API call) | read |
 | `folder-admin` (optional) | `create_folder` | Creates a folder | write |
 | | `move_entities_to_folder` | Moves tags, triggers and variables into a folder (folder `0` = out of any folder) | write |
 | | `delete_folder` | Deletes a folder; the preview lists what is in it, which is kept | destructive |
@@ -120,6 +121,11 @@ Groups marked *optional* are off unless you enable them.
 | | `list_transformations`, `get_transformation` | Lists transformations / gets one transformation in full | read |
 | | `create_transformation`, `update_transformation` | Creates a transformation / changes some fields of a transformation (other fields are kept) | write |
 | | `delete_transformation` | Deletes a transformation; the preview shows the transformation | destructive |
+| `templates` (optional) | `list_templates` | Lists custom templates with the `cvt_…` type their tags or variables use (no template code) | read |
+| | `get_template` | Gets one template with its `.tpl` code (optionally without it) | read |
+| | `create_template`, `update_template` | Creates a template from `.tpl` code / changes its name or code (other fields are kept) | write |
+| | `import_gallery_template` | Imports a Community Template Gallery template by GitHub owner and repository, accepting its declared permissions | write |
+| | `delete_template` | Deletes a template; the preview lists the tags and variables that use it | destructive |
 | `environments` (optional) | `list_environments`, `get_environment` | Lists a container's environments / gets one with its authorization code | read |
 | | `create_environment` | Creates a user environment (e.g. staging); applies immediately | admin |
 | | `update_environment` | Changes an environment; repointing it to another version or workspace needs `confirm: true` | destructive |
@@ -385,7 +391,7 @@ The Worker asks Google for `openid email profile` (to identify you) plus the sco
 | Scope (`https://www.googleapis.com/auth/…`) | Needed for |
 |---|---|
 | `tagmanager.readonly` | Every read tool |
-| `tagmanager.edit.containers` | Creating workspaces; creating, updating and deleting tags, triggers, variables, folders, built-in variables, Google tag configs, clients and transformations |
+| `tagmanager.edit.containers` | Creating workspaces; creating, updating and deleting tags, triggers, variables, folders, built-in variables, Google tag configs, clients, transformations and custom templates |
 | `tagmanager.edit.containerversions` | `create_version` |
 | `tagmanager.publish` | `publish_version` |
 | `tagmanager.delete.containers` | `delete_workspace`, `delete_container` |

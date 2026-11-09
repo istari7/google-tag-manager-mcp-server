@@ -13,8 +13,15 @@ Adapted material:
   skills/generate-tracking-plan, skills/suggest-ga4-setup and
   skills/find-gallery-template (SKILL.md each): adapted from the texts of its
   MCP prompts of similar names (gtm/prompts.go).
+- src/tools/guidance.ts (get_tag_templates, get_trigger_templates): the idea
+  and starting set of examples adapted from gtm/templates.go, rewritten for
+  this server's argument names.
+- src/tools/templates.ts (custom template tools): tool names and the
+  `cvt_…` type rule adapted from gtm/tool_templates.go and the
+  gtm/tool_*_template.go files.
 
-Each adapted file names this notice in its `license` frontmatter field.
+Each adapted skill names this notice in its `license` frontmatter field, and
+each adapted source file in its header comment.
 
 The notice and license of gtm-mcp-server follow.
 

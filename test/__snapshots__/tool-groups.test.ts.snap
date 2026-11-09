@@ -45,7 +45,10 @@ exports[`tools per configuration > puts every tool in exactly one group (or core
     "update_google_tag_config",
     "delete_google_tag_config",
   ],
-  "guidance": [],
+  "guidance": [
+    "get_tag_templates",
+    "get_trigger_templates",
+  ],
   "reverts": [],
   "server": [
     "list_clients",
@@ -66,7 +69,14 @@ exports[`tools per configuration > puts every tool in exactly one group (or core
     "update_tag",
     "delete_tag",
   ],
-  "templates": [],
+  "templates": [
+    "list_templates",
+    "get_template",
+    "create_template",
+    "update_template",
+    "delete_template",
+    "import_gallery_template",
+  ],
   "triggers": [
     "list_triggers",
     "get_trigger",

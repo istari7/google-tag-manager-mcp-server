@@ -1208,6 +1208,154 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
   },
   {
     "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+    ],
+    "description": "List a workspace's custom templates: ID, name, for (tag, variable, client) and the type their tags or variables use. No code.",
+    "name": "list_templates",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "templateId",
+      "includeTemplateData",
+    ],
+    "description": "Get one custom template with its .tpl code (templateData) and fingerprint.",
+    "name": "get_template",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "templateId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "name",
+      "templateData",
+    ],
+    "description": "Create a custom template from its .tpl code. For a Community Template Gallery one, use import_gallery_template.",
+    "name": "create_template",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "name",
+      "templateData",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "templateId",
+      "name",
+      "templateData",
+      "fingerprint",
+    ],
+    "description": "Change a template's name or code; omitted ones are kept. GTM shows displayName from the code's ___INFO___. Pass get_template's fingerprint.",
+    "name": "update_template",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "templateId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "templateId",
+      "confirm",
+    ],
+    "description": "Delete a custom template. Without confirm: true, only previews, listing the tags and variables that use it.",
+    "name": "delete_template",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "templateId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "galleryOwner",
+      "galleryRepository",
+      "gallerySha",
+    ],
+    "description": "Import a Community Template Gallery template from GitHub, accepting its declared permissions. Returns the type for create_tag.",
+    "name": "import_gallery_template",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "galleryOwner",
+      "galleryRepository",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [],
+    "description": "Example create_tag arguments for common tags (Google tag, GA4 event and ecommerce, HTML, pixel, Ads). Read before building a tag.",
+    "name": "get_tag_templates",
+    "required": [],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [],
+    "description": "Example create_trigger arguments for common triggers (page, custom event, click, link, form, visibility, scroll, timer, group).",
+    "name": "get_trigger_templates",
+    "required": [],
+  },
+  {
+    "annotations": {
       "destructiveHint": false,
       "idempotentHint": false,
       "readOnlyHint": false,

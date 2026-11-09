@@ -1,7 +1,7 @@
 ---
 name: find-gallery-template
 title: Find a Community Template Gallery template
-description: Find a tag or variable template in the GTM Community Template Gallery (consent banners, ad pixels, …), check it before use, and walk the user through adding it. This server cannot import gallery templates itself.
+description: Find a tag or variable template in the GTM Community Template Gallery (consent banners, ad pixels, …), check it before use, and import it with import_gallery_template.
 arguments:
   - name: templateName
     description: The template or vendor to look for, e.g. "Cookiebot" or "LinkedIn Insight"
@@ -12,9 +12,10 @@ license: BSD-3-Clause. Adapts material from gtm-mcp-server by Paolo Bietolini; s
 
 # Find a Community Template Gallery template
 
-Help the user find and add a Community Template Gallery template. This
-server has no tool to import templates, so the user adds it in the GTM UI and
-you take over from there.
+Help the user find and add a Community Template Gallery template. Importing
+needs the optional `templates` tool group (`GTM_TOOL_GROUPS`); if
+`import_gallery_template` is not in your tool list, the user can add the
+template in the GTM UI instead (see the end of this skill).
 
 ## Find it
 
@@ -33,16 +34,22 @@ you take over from there.
 
 ## Add it
 
-The user imports it in the GTM UI, in the workspace you are working in:
-**Templates → Tag Templates (or Variable Templates) → Search Gallery**, pick
-the template, then **Add to workspace**.
+1. Tell the user which template you will import (owner and repository) and
+   what its permissions allow, and get their go-ahead: importing accepts the
+   template's declared permissions on their behalf.
+2. `import_gallery_template` with the workspace IDs, `galleryOwner` and
+   `galleryRepository` (the GitHub owner and repository), and optionally
+   `gallerySha` to pin a commit. The result includes the template's `type`
+   (`cvt_…`), which tags or variables built from it use.
+3. Create the tag (or variable) with `create_tag` / `create_variable` using
+   that type, following the template's documentation for its parameters. If
+   another tag already uses the template, read it with `get_tag` and copy its
+   parameter shape. `list_templates` shows the templates already in the
+   workspace and their types.
+4. Review, version and publish as usual (`plan-safe-edit`).
 
-Then:
-
-1. `get_workspace_status` shows the imported template as a pending change
-   with its template ID.
-2. A tag created from the template has the type `cvt_<containerId>_<templateId>`.
-   If another tag already uses the template, read it with `get_tag` and copy
-   its type and parameter shape.
-3. Create the tag with `create_tag` following the template's documentation,
-   then review, version and publish as usual (`plan-safe-edit`).
+Without the `templates` group, the user imports it in the GTM UI, in the
+workspace you are working in: **Templates → Tag Templates (or Variable
+Templates) → Search Gallery**, pick the template, then **Add to workspace**.
+`get_workspace_status` then shows it as a pending change, and a tag created
+from it has the type `cvt_<containerId>_<templateId>`.

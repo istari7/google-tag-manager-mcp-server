@@ -94,6 +94,7 @@ describe("tools/list", () => {
 			"delete_folder",
 			"delete_google_tag_config",
 			"delete_tag",
+			"delete_template",
 			"delete_transformation",
 			"delete_trigger",
 			"delete_user_permission",
