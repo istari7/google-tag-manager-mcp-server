@@ -4,8 +4,8 @@ import { GtmApiError } from "../gtm/errors";
 import { accounts, type Container } from "../gtm/generated";
 import { accountPath, containerPath, isGtmId, isPublicContainerId } from "../gtm/paths";
 import type { ToolGroup } from "../mcp/registry";
-import { ok, okEntity, okList } from "../mcp/result";
-import { accountInput, containerInput, NO_INPUT } from "./inputs";
+import { fail, ok, okEntity, okList } from "../mcp/result";
+import { accountInput, confirmInput, containerInput, NO_INPUT } from "./inputs";
 
 const lookupInput = z.object({
 	publicId: z
@@ -148,5 +148,40 @@ export const accountTools: ToolGroup = (tools) => {
 			annotations: { readOnlyHint: true },
 		},
 		async (ids, { gtm }) => okEntity(await accounts.containers.snippet(gtm, { path: containerPath(ids) })),
+	);
+
+	tools.add(
+		"delete_container",
+		{
+			description:
+				"Permanently delete a container. Without confirm: true, only previews. Needs the user's explicit go-ahead and the container's public ID (GTM-XXXX).",
+			input: containerInput.extend({
+				publicId: z.string().optional().describe("The container's public ID (GTM-XXXX); required with confirm: true"),
+				confirm: confirmInput("delete the container"),
+			}),
+			annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+		},
+		async ({ publicId, confirm, ...ids }, { gtm }) => {
+			const path = containerPath(ids);
+			const container = await accounts.containers.get(gtm, { path });
+			const expected = container.publicId;
+			if (confirm !== true) {
+				return ok({
+					preview: true,
+					wouldDelete: { kind: "container", ...containerSummary(container) },
+					message: `Nothing was deleted. Deleting a container removes its workspaces and versions, and sites that load ${expected ?? "it"} stop getting its tags. Get the user's explicit go-ahead, then call delete_container again with confirm: true and publicId: "${expected ?? ""}".`,
+				});
+			}
+			if (!expected || publicId?.trim().toUpperCase() !== expected.toUpperCase()) {
+				return fail(
+					`Nothing was deleted: publicId must be "${expected ?? "?"}", the public ID of container ${ids.containerId}.`,
+				);
+			}
+			await accounts.containers.delete(gtm, { path });
+			return ok({
+				deleted: { kind: "container", containerId: ids.containerId, publicId: expected },
+				note: "The container is deleted. Remove its snippet from the sites that loaded it.",
+			});
+		},
 	);
 };

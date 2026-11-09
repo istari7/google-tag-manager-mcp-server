@@ -370,7 +370,7 @@ describe("Q9 workspace edits are not live until published", () => {
 		expect(UNPUBLISHED_CHANGES_NOTE).toMatch(/not live/);
 		expect(UNPUBLISHED_CHANGES_NOTE).toContain("create_version");
 		expect(UNPUBLISHED_CHANGES_NOTE).toContain("GTM UI");
-		expect(UNPUBLISHED_CHANGES_NOTE).not.toContain("publish_version");
+		expect(UNPUBLISHED_CHANGES_NOTE).toContain("publish_version, only with the user's go-ahead");
 	});
 });
 

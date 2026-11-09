@@ -1,4 +1,4 @@
-// list_accounts, list_containers, lookup_container, get_container_snippet.
+// list_accounts, list_containers, lookup_container, get_container_snippet, delete_container.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Container } from "../../src/gtm/generated";
@@ -7,11 +7,13 @@ import { errors } from "../fixtures/gtm";
 import {
 	ACCOUNT,
 	ACCOUNT_ID,
+	byMethod,
 	CONTAINER,
 	CONTAINER_ARGS,
 	CONTAINER_ID,
 	callTool,
 	describeCall,
+	empty,
 	FAKE_GOOGLE_TOKEN,
 	mockGtm,
 	pages,
@@ -224,6 +226,44 @@ describe("get_container_snippet", () => {
 		expect(result).toMatchObject({
 			isError: true,
 			text: `Not found: ${CONTAINER}:snippet. Check the account/container/workspace IDs.`,
+		});
+	});
+});
+
+describe("delete_container", () => {
+	it.each([{}, { confirm: false }, { publicId: "GTM-ABC1234" }])(
+		"without confirm: true (%o) only GETs and previews",
+		async (extra) => {
+			const mock = mockGtm({ [CONTAINER]: byMethod({ GET: reply(container) }) });
+			const result = await callTool("delete_container", { ...CONTAINER_ARGS, ...extra });
+			expect(mock.gtm().map(describeCall)).toMatchObject([{ method: "GET", path: CONTAINER }]);
+			const out = result.json<{ preview: boolean; wouldDelete: Record<string, unknown>; message: string }>();
+			expect(out.preview).toBe(true);
+			expect(out.wouldDelete).toMatchObject({ kind: "container", containerId: CONTAINER_ID, publicId: "GTM-ABC1234" });
+			expect(out.message).toContain('confirm: true and publicId: "GTM-ABC1234"');
+		},
+	);
+
+	it.each([undefined, "GTM-WRONG99", ""])("with confirm: true but publicId %o deletes nothing", async (publicId) => {
+		const mock = mockGtm({ [CONTAINER]: byMethod({ GET: reply(container) }) });
+		const result = await callTool("delete_container", { ...CONTAINER_ARGS, confirm: true, publicId });
+		expect(result).toMatchObject({
+			isError: true,
+			text: `Nothing was deleted: publicId must be "GTM-ABC1234", the public ID of container ${CONTAINER_ID}.`,
+		});
+		expect(mock.gtm().filter((c) => c.method !== "GET")).toHaveLength(0);
+	});
+
+	it("with confirm: true and the matching publicId (any case) GETs, then sends one DELETE", async () => {
+		const mock = mockGtm({ [CONTAINER]: byMethod({ GET: reply(container), DELETE: empty }) });
+		const result = await callTool("delete_container", { ...CONTAINER_ARGS, confirm: true, publicId: " gtm-abc1234 " });
+		expect(mock.gtm().map(describeCall)).toMatchObject([
+			{ method: "GET", path: CONTAINER },
+			{ method: "DELETE", path: CONTAINER, query: {}, body: undefined },
+		]);
+		expect(result.json()).toEqual({
+			deleted: { kind: "container", containerId: CONTAINER_ID, publicId: "GTM-ABC1234" },
+			note: "The container is deleted. Remove its snippet from the sites that loaded it.",
 		});
 	});
 });

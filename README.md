@@ -15,9 +15,10 @@ versions.
 - **Self-hosted.** It runs in your own Cloudflare account against your own Google Cloud project,
   so the API quota and the tokens are yours.
 - **Default-deny.** Only the Google accounts or Workspace domains you list can sign in.
-- **It never publishes.** The AI can edit workspaces and save versions, but only a person can make
-  a version live, in the GTM UI. It also never deletes a container or an account. See
-  [What this server will never do](#what-this-server-will-never-do).
+- **Nothing goes live without a yes.** The AI edits workspaces and saves versions. Publishing a
+  version, deleting a workspace and deleting a container are confirm-gated: the tool shows a
+  preview first and acts only on a second call with `confirm: true`. See
+  [Publishing and deleting](#publishing-and-deleting).
 
 Written in TypeScript. OAuth comes from
 [`@cloudflare/workers-oauth-provider`](https://github.com/cloudflare/workers-oauth-provider) and
@@ -27,7 +28,7 @@ the GTM client is generated from Google's Discovery document.
 
 - [How it works](#how-it-works)
 - [Tools](#tools)
-- [What this server will never do](#what-this-server-will-never-do)
+- [Publishing and deleting](#publishing-and-deleting)
 - [Safety model](#safety-model)
 - [Deploy](#deploy)
 - [Connect a client](#connect-a-client)
@@ -57,9 +58,9 @@ MCP client ──OAuth──▶ your Worker (/authorize, /token, /mcp) ──▶
 ## Tools
 
 **Kind:** *read* changes nothing. *write* changes a workspace or creates a version, but nothing
-on your website changes until a person publishes a version in the GTM UI. *destructive* deletes a
-tag, trigger or variable from a workspace, and needs `confirm: true` (without it, the tool returns
-a preview of what it would do). No tool changes your live site.
+on your website changes until a version is published. *destructive* deletes something or
+publishes a version, and needs `confirm: true` (without it, the tool returns a preview of what it
+would do). `publish_version` is the only tool that changes your live site.
 
 | Group | Tool | What it does | Kind |
 |---|---|---|---|
@@ -69,8 +70,10 @@ a preview of what it would do). No tool changes your live site.
 | | `list_containers` | Lists the containers in an account | read |
 | | `lookup_container` | Finds a container by its public ID (`GTM-XXXXXXX`) | read |
 | | `get_container_snippet` | Returns the container's install snippet | read |
+| | `delete_container` | Deletes a container for good; needs `confirm: true` and its public ID typed back | destructive |
 | Workspaces | `list_workspaces` | Lists a container's workspaces | read |
 | | `create_workspace` | Creates a workspace (containers allow only a few) | write |
+| | `delete_workspace` | Deletes a workspace and its unversioned changes; the preview counts them | destructive |
 | | `get_workspace_status` | Shows pending changes and merge conflicts | read |
 | | `quick_preview_workspace` | Checks a workspace compiles by building a throwaway preview; saves and publishes nothing | read |
 | Tags | `list_tags`, `get_tag` | Lists tags / gets one tag in full | read |
@@ -87,26 +90,31 @@ a preview of what it would do). No tool changes your live site.
 | Folders | `list_folders` | Lists folders | read |
 | | `create_folder` | Creates a folder | write |
 | | `move_entities_to_folder` | Moves tags, triggers and variables into a folder (folder `0` = out of any folder) | write |
-| Versions | `create_version` | Saves the workspace as a new container version. Does not publish: a person publishes it in the GTM UI. Refuses when there are no changes or there are merge conflicts | write |
+| Versions | `create_version` | Saves the workspace as a new container version. Does not publish. Refuses when there are no changes or there are merge conflicts | write |
+| | `publish_version` | Makes a version live; the preview shows the version and what is live now | destructive |
 | | `get_live_version` | Gets the currently published version | read |
 | | `list_versions` | Lists container versions | read |
 
 The server also offers best-practices guides as MCP resources (`gtm://best-practices`).
 
-## What this server will never do
+## Publishing and deleting
 
-These are deliberate, permanent limits, not missing features:
+These tools change your live site or remove work for good, so each one takes two calls:
 
-- **Publish a container version.** The AI can prepare changes in a workspace and save them as a
-  version with `create_version`. A person then reviews that version and publishes it in the GTM
-  UI (Versions › Publish). Nothing the AI does reaches your live site on its own.
-- **Delete a container or an account.** Only tags, triggers and variables inside a workspace can be
-  deleted, and only with `confirm: true`.
+- **`publish_version`** makes a saved version live on every site that loads the container. The
+  first call (no `confirm`) shows what the version contains and what is live now; only a second
+  call with `confirm: true` publishes. The best-practices guide tells the AI to publish only when
+  you have explicitly asked for that version to go live. To roll back, publish an earlier version.
+- **`delete_workspace`** discards a workspace and its unversioned changes. Saved versions and the
+  live container are not affected.
+- **`delete_container`** deletes a container, its workspaces and its versions. Besides
+  `confirm: true` it needs the container's public ID (`GTM-XXXXXXX`) typed back, so a wrong
+  numeric ID can't delete the wrong container.
 
-This is enforced in the GTM API client (`src/gtm/client.ts`), not just by leaving the tools out:
-every request whose path ends in `:publish`, and every `DELETE` of a container or account, is
-refused before anything is sent to Google. The server does not need the `tagmanager.publish` or
-`tagmanager.delete.containers` scopes, and `/setup` tells you to remove them if they are configured.
+They need the `tagmanager.publish` and `tagmanager.delete.containers` scopes. If you'd rather not
+allow them, leave those scopes out of `GOOGLE_SCOPES` and the consent screen: the tools then fail
+with a permission error, and `/setup` lists which tools are affected. There is no tool to delete
+an account (the API has no such method).
 
 ## Safety model
 
@@ -115,16 +123,16 @@ refused before anything is sent to Google. The server does not need the `tagmana
   this, anyone who found your URL could sign in and use your project's GTM API quota.
 - **Per-client consent.** Each MCP client must be approved on a consent page before the Google
   sign-in. The approval is remembered in that browser for 30 days.
-- **`confirm: true`** is required by every `delete_*` tool. Without it they only describe what
-  would be deleted.
+- **`confirm: true`** is required by every `delete_*` tool and by `publish_version`. Without it they
+  only describe what would happen. `delete_container` also needs the container's public ID.
 - **No lost edits.** GTM updates replace the whole object. Update tools read the current entity,
   merge only the fields you change, and write it back with Google's fingerprint. They also take
   the `fingerprint` the AI saw in its earlier `get_*` call: if someone changed the entity since
   (in the GTM UI, say), the update fails with a conflict instead of overwriting their work. See
   [GTM_API_QUIRKS.md](GTM_API_QUIRKS.md).
 - **Workspaces are drafts.** Changes made in a workspace are not on your site until a version is
-  created (`create_version`) and a person publishes it in the GTM UI. `create_version` refuses when
-  the workspace has no changes or has merge conflicts.
+  created (`create_version`) and published (`publish_version`, or in the GTM UI). `create_version`
+  refuses when the workspace has no changes or has merge conflicts.
 - **Tokens stay server-side.** Google tokens are stored only inside the encrypted grant. They are
   never logged and never returned by a tool.
 - **Rate limits.** Per-IP limits on the sign-in endpoints, a looser one on `/token` (Claude web and
@@ -244,13 +252,14 @@ The Worker asks Google for `openid email profile` (to identify you) plus the sco
 | Scope (`https://www.googleapis.com/auth/…`) | Needed for |
 |---|---|
 | `tagmanager.readonly` | Every read tool |
-| `tagmanager.edit.containers` | Creating, updating and deleting workspaces, tags, triggers, variables, folders and built-in variables |
+| `tagmanager.edit.containers` | Creating workspaces; creating, updating and deleting tags, triggers, variables, folders and built-in variables |
 | `tagmanager.edit.containerversions` | `create_version` |
+| `tagmanager.publish` | `publish_version` |
+| `tagmanager.delete.containers` | `delete_workspace`, `delete_container` |
 
-- **Not needed, by design:** `tagmanager.publish` and `tagmanager.delete.containers`. The server
-  never publishes or deletes containers (see
-  [What this server will never do](#what-this-server-will-never-do)). Leave them out of
-  `GOOGLE_SCOPES` and the consent screen; `/setup` warns if they are there.
+- `tagmanager.publish` and `tagmanager.delete.containers` are optional. Without them the server
+  works the same, except that `publish_version`, `delete_workspace` and `delete_container` fail
+  with a permission error. `/setup` lists any that are missing.
 - After changing `GOOGLE_SCOPES`, redeploy and reconnect each client so Google asks for the new
   set of permissions.
 - `tagmanager.manage.accounts` and `tagmanager.manage.users` are not used by any tool. If your
@@ -274,7 +283,9 @@ The Worker asks Google for `openid email profile` (to identify you) plus the sco
 - The Tag Manager API allows 10,000 requests a day per Google Cloud project, plus a low per-user
   rate limit (see APIs & Services › Tag Manager API › Quotas). Your project, your quota.
 - An update costs 2 API calls (read, then write). `create_version` costs 2 (status check, then
-  create). Previews are reads: 1 call for a delete (`delete_trigger` also reads the tag list). The server retries rate-limit errors with backoff.
+  create). Previews are reads: 1 call for a delete (`delete_trigger` also reads the tag list,
+  `delete_workspace` the workspace status), 2 for `publish_version` (the version and the live
+  one). A confirmed `delete_container` costs 2 (it re-reads the public ID). The server retries rate-limit errors with backoff.
 
 ## The 7-day sign-in problem
 

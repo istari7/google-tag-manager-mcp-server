@@ -54,15 +54,17 @@ Without this, sign-in works but every tool call fails with a permission error.
    | `https://www.googleapis.com/auth/tagmanager.readonly` | All read tools |
    | `https://www.googleapis.com/auth/tagmanager.edit.containers` | Editing workspaces, tags, triggers, variables, folders |
    | `https://www.googleapis.com/auth/tagmanager.edit.containerversions` | `create_version` |
+   | `https://www.googleapis.com/auth/tagmanager.publish` | `publish_version` (optional) |
+   | `https://www.googleapis.com/auth/tagmanager.delete.containers` | `delete_workspace`, `delete_container` (optional) |
 
    `openid`, `email` and `profile` are always requested too. They need no setup.
 
-   Do **not** add `tagmanager.publish` or `tagmanager.delete.containers`. This server never
-   publishes a version or deletes a container (a person publishes in the GTM UI), so it doesn't
-   need them, and `/setup` warns if they are in `GOOGLE_SCOPES`.
+   The last two are optional. Leave them out (here and in `GOOGLE_SCOPES`) if you don't want the
+   AI to be able to publish versions or delete workspaces and containers; those tools then fail
+   with a permission error, and `/setup` lists them.
 3. Click **Update**, then **Save**.
 
-[screenshot: Data Access page listing the three Tag Manager scopes]
+[screenshot: Data Access page listing the Tag Manager scopes]
 
 The list must match what the Worker asks for: the `GOOGLE_SCOPES` var in `wrangler.jsonc`. The
 `/setup` page lists the scopes it requests. If `GOOGLE_SCOPES` also has

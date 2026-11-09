@@ -3,9 +3,9 @@ import { accounts, type QuickPreviewResponse } from "../gtm/generated";
 import { containerPath, workspacePath } from "../gtm/paths";
 import type { ToolGroup } from "../mcp/registry";
 import { fail, ok, okList } from "../mcp/result";
-import { containerInput, nameInput, workspaceInput } from "./inputs";
+import { confirmInput, containerInput, nameInput, workspaceInput } from "./inputs";
 import { summarizeWorkspaceStatus, versionCounts, WORKSPACE_NOT_LIVE_NOTE } from "./summaries";
-import { okWrite } from "./write";
+import { deleteWithConfirm, okWrite } from "./write";
 
 const workspaces = accounts.containers.workspaces;
 
@@ -46,7 +46,7 @@ export const workspaceTools: ToolGroup = (tools) => {
 		"get_workspace_status",
 		{
 			description:
-				"List a workspace's pending changes and merge conflicts. Changes are not live until a version is created (create_version) and a human publishes it in the GTM UI.",
+				"List a workspace's pending changes and merge conflicts. Changes are not live until a version is created (create_version) and published (publish_version).",
 			input: workspaceInput,
 			annotations: { readOnlyHint: true },
 		},
@@ -89,6 +89,32 @@ export const workspaceTools: ToolGroup = (tools) => {
 				compiles: true,
 				...(response.containerVersion ? { counts: versionCounts(response.containerVersion) } : {}),
 				note: "Preview only: nothing was saved or published.",
+			});
+		},
+	);
+
+	tools.add(
+		"delete_workspace",
+		{
+			description:
+				"Delete a workspace and discard its unversioned changes. Without confirm: true, only shows what would be lost. Saved versions are kept.",
+			input: workspaceInput.extend({ confirm: confirmInput("delete") }),
+			annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+		},
+		async ({ confirm, ...ids }, { gtm }) => {
+			const path = workspacePath(ids);
+			return deleteWithConfirm({
+				confirm,
+				kind: "workspace",
+				id: ids.workspaceId,
+				get: () => workspaces.get(gtm, { path }),
+				summarize: (w) => ({ workspaceId: w.workspaceId, name: w.name, description: w.description }),
+				related: async () => {
+					const status = await workspaces.getStatus(gtm, { path });
+					return { unversionedChanges: (status?.workspaceChange ?? []).length };
+				},
+				remove: () => workspaces.delete(gtm, { path }),
+				note: "The workspace and its unversioned changes are gone. Saved versions and the live container are unchanged.",
 			});
 		},
 	);

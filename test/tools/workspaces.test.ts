@@ -1,14 +1,17 @@
-// list_workspaces, get_workspace_status (Q9), create_workspace, quick_preview_workspace.
+// list_workspaces, get_workspace_status (Q9), create_workspace, quick_preview_workspace,
+// delete_workspace.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GetWorkspaceStatusResponse } from "../../src/gtm/generated";
 import { WORKSPACE_NOT_LIVE_NOTE } from "../../src/tools/summaries";
 import { errors, folder, ga4EventTag, linkClickTrigger } from "../fixtures/gtm";
 import {
+	byMethod,
 	CONTAINER,
 	CONTAINER_ARGS,
 	callTool,
 	describeCall,
+	empty,
 	mockGtm,
 	pages,
 	reply,
@@ -80,7 +83,7 @@ describe("get_workspace_status", () => {
 		const out = (await callTool("get_workspace_status", WORKSPACE_ARGS)).json();
 		expect(out).toMatchObject({ changeCount: 1, conflictCount: 0 });
 		expect(out.conflicts).toBeUndefined();
-		expect(out.note).toMatch(/not live.*version.*publishes it in the GTM UI/);
+		expect(out.note).toMatch(/not live.*create_version.*publish_version, only with the user's go-ahead/);
 	});
 
 	it("reports a clean workspace", async () => {
@@ -158,5 +161,44 @@ describe("quick_preview_workspace", () => {
 		expect(result.isError).toBe(true);
 		expect(result.text).toContain(text);
 		expect(writes(mock.gtm())).toHaveLength(1); // the preview POST itself, nothing else
+	});
+});
+
+describe("delete_workspace", () => {
+	const routes = {
+		[WORKSPACE]: byMethod({
+			GET: reply({ workspaceId: "7", name: "Add GA4", description: "Checkout", path: WORKSPACE }),
+		}),
+		[`${WORKSPACE}/status`]: reply({ workspaceChange: [{ changeStatus: "added", tag: ga4EventTag }] }),
+	};
+
+	it.each([{}, { confirm: false }])("without confirm: true (%o) only reads and previews", async (extra) => {
+		const mock = mockGtm(routes);
+		const result = await callTool("delete_workspace", { ...WORKSPACE_ARGS, ...extra });
+		expect(writes(mock.gtm())).toHaveLength(0);
+		expect(result.json()).toEqual({
+			preview: true,
+			wouldDelete: {
+				kind: "workspace",
+				workspaceId: "7",
+				name: "Add GA4",
+				description: "Checkout",
+				unversionedChanges: 1,
+			},
+			message:
+				"Nothing was deleted. To delete this workspace, get the user's go-ahead, then call delete_workspace again with confirm: true.",
+		});
+	});
+
+	it("with confirm: true sends one DELETE and says the live container is unchanged", async () => {
+		const mock = mockGtm({ [WORKSPACE]: byMethod({ DELETE: empty }) });
+		const result = await callTool("delete_workspace", { ...WORKSPACE_ARGS, confirm: true });
+		expect(mock.gtm().map(describeCall)).toMatchObject([
+			{ method: "DELETE", path: WORKSPACE, query: {}, body: undefined },
+		]);
+		expect(result.json()).toEqual({
+			deleted: { kind: "workspace", id: "7" },
+			note: "The workspace and its unversioned changes are gone. Saved versions and the live container are unchanged.",
+		});
 	});
 });

@@ -72,6 +72,25 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
   },
   {
     "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "publicId",
+      "confirm",
+    ],
+    "description": "Permanently delete a container. Without confirm: true, only previews. Needs the user's explicit go-ahead and the container's public ID (GTM-XXXX).",
+    "name": "delete_container",
+    "required": [
+      "accountId",
+      "containerId",
+    ],
+  },
+  {
+    "annotations": {
       "readOnlyHint": true,
     },
     "args": [
@@ -94,7 +113,7 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "containerId",
       "workspaceId",
     ],
-    "description": "List a workspace's pending changes and merge conflicts. Changes are not live until a version is created (create_version) and a human publishes it in the GTM UI.",
+    "description": "List a workspace's pending changes and merge conflicts. Changes are not live until a version is created (create_version) and published (publish_version).",
     "name": "get_workspace_status",
     "required": [
       "accountId",
@@ -133,6 +152,26 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
     ],
     "description": "Check that a workspace compiles by building a throwaway preview version. Saves and publishes nothing.",
     "name": "quick_preview_workspace",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "confirm",
+    ],
+    "description": "Delete a workspace and discard its unversioned changes. Without confirm: true, only shows what would be lost. Saved versions are kept.",
+    "name": "delete_workspace",
     "required": [
       "accountId",
       "containerId",
@@ -617,13 +656,33 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "name",
       "notes",
     ],
-    "description": "Save a workspace's changes as a new container version. Does not publish: a human publishes it in the GTM UI. Fails if the workspace has no changes or has merge conflicts.",
+    "description": "Save a workspace's changes as a new container version. Does not publish (see publish_version). Fails if the workspace has no changes or has merge conflicts.",
     "name": "create_version",
     "required": [
       "accountId",
       "containerId",
       "workspaceId",
       "name",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "containerVersionId",
+      "confirm",
+    ],
+    "description": "Publish a container version: it goes live on every site using the container. Without confirm: true, only previews. Needs the user's explicit go-ahead.",
+    "name": "publish_version",
+    "required": [
+      "accountId",
+      "containerId",
+      "containerVersionId",
     ],
   },
   {

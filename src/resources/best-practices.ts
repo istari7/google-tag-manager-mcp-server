@@ -23,7 +23,7 @@ export interface Topic {
 export const TOPICS: Readonly<Record<string, Topic>> = {
 	publishing: {
 		title: "Publishing workflow and safety",
-		description: "Workspace → review → version; a person publishes in the GTM UI. Rollback.",
+		description: "Workspace → review → version → publish only on the user's go-ahead. Rollback.",
 		text: publishing,
 	},
 	naming: {

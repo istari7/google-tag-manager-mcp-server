@@ -1,24 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-	assertAllowedRequest,
 	BACKOFF_MS,
 	callMethod,
 	createGtmClient,
 	DEFAULT_MAX_PAGES,
 	encodeQuery,
 	GTM_API_BASE_URL,
-	type GtmRequester,
 	listAll,
 	MAX_RETRIES,
 	resolveApiUrl,
 } from "../src/gtm/client";
-import {
-	FORBIDDEN_OPERATION_MESSAGE,
-	GtmApiError,
-	GtmForbiddenOperationError,
-	MESSAGES,
-	toGtmApiError,
-} from "../src/gtm/errors";
+import { GtmApiError, MESSAGES, toGtmApiError } from "../src/gtm/errors";
 import { accounts, methods, type Tag } from "../src/gtm/generated";
 import {
 	accountPath,
@@ -506,71 +498,22 @@ describe("paths", () => {
 	});
 });
 
-// Owner decision (README "What this server will never do"): no publishing, no container or
-// account deletion. The client refuses them before reading the token or calling fetch, even
-// through the generated wrappers that still exist in generated.ts.
-describe("never publish, never delete a container or account", () => {
+// Publishing and deleting containers and workspaces go through the generated wrappers like any
+// other call. The tools gate them behind confirm: true (test/tools/*.test.ts).
+describe("publish and delete requests", () => {
 	const CONTAINER = "accounts/1234567890/containers/201";
 	const VERSION = `${CONTAINER}/versions/43`;
 
-	async function refused(promise: Promise<unknown>) {
-		await expect(promise).rejects.toThrow(GtmForbiddenOperationError);
-		await expect(promise).rejects.toThrow(FORBIDDEN_OPERATION_MESSAGE);
-	}
-
-	it("refuses versions.publish (the generated wrapper) with zero fetch calls and no token read", async () => {
-		const { client, calls, tokenCalls } = testClient([json(200, { containerVersion: {} })]);
-		await refused(accounts.containers.versions.publish(client, { path: VERSION }));
-		expect(calls).toHaveLength(0);
-		expect(tokenCalls()).toBe(0);
+	it("versions.publish POSTs {version}:publish", async () => {
+		const { client, calls } = testClient([json(200, { containerVersion: { containerVersionId: "43" } })]);
+		const response = await accounts.containers.versions.publish(client, { path: VERSION });
+		expect(response.containerVersion?.containerVersionId).toBe("43");
+		expect(calls.map((c) => `${c.method} ${c.url.pathname.replace("/tagmanager/v2/", "")}`)).toEqual([
+			`POST ${VERSION}:publish`,
+		]);
 	});
 
-	it.each([
-		["POST", `${VERSION}:publish`],
-		["POST", `${VERSION}:publish?fingerprint=1`],
-		["POST", `${VERSION}:PUBLISH`],
-		["POST", `${VERSION}%3Apublish`],
-		["POST", `${WORKSPACE}:publish`],
-		["POST", `${CONTAINER}/environments/5:publish`],
-		["POST", `${CONTAINER}:publish`],
-		["GET", `${VERSION}:publish`],
-		["PUT", "accounts/1:publish"],
-	] as const)("refuses %s %s (any :publish path) with zero fetch calls", async (method, path) => {
-		const { client, calls, tokenCalls } = testClient([json(200, {})]);
-		await refused(client.request(method, path));
-		expect(calls).toHaveLength(0);
-		expect(tokenCalls()).toBe(0);
-	});
-
-	it("refuses containers.delete (the generated wrapper) with zero fetch calls", async () => {
-		const { client, calls, tokenCalls } = testClient([json(204)]);
-		await refused(accounts.containers.delete(client, { path: CONTAINER }));
-		expect(calls).toHaveLength(0);
-		expect(tokenCalls()).toBe(0);
-	});
-
-	it.each([
-		CONTAINER,
-		`${CONTAINER}?force=true`,
-		"accounts/1/containers/2",
-		"accounts/1/containers/2:delete",
-		"accounts/1",
-		"ACCOUNTS/1/CONTAINERS/2",
-	])("refuses DELETE %s (a container or an account) with zero fetch calls", async (path) => {
-		const { client, calls } = testClient([json(204)]);
-		await refused(client.request("DELETE", path));
-		expect(calls).toHaveLength(0);
-	});
-
-	it("refuses through callMethod even with a requester that is not the GTM client", async () => {
-		const request = vi.fn();
-		const requester: GtmRequester = { request: <T>() => request() as Promise<T> };
-		await refused(callMethod(requester, methods["accounts.containers.versions.publish"], { path: VERSION }));
-		await refused(callMethod(requester, methods["accounts.containers.delete"], { path: CONTAINER }));
-		expect(request).not.toHaveBeenCalled();
-	});
-
-	it("still sends tag, trigger, variable, folder, workspace and version DELETEs", async () => {
+	it("sends container, workspace, tag, trigger, variable, folder and version DELETEs", async () => {
 		const { client, calls } = testClient([json(204)]);
 		const ws = accounts.containers.workspaces;
 		await ws.tags.delete(client, { path: TAG_PATH });
@@ -579,6 +522,7 @@ describe("never publish, never delete a container or account", () => {
 		await ws.folders.delete(client, { path: FOLDER_PATH });
 		await ws.delete(client, { path: WORKSPACE });
 		await accounts.containers.versions.delete(client, { path: VERSION });
+		await accounts.containers.delete(client, { path: CONTAINER });
 		expect(calls.map((c) => `${c.method} ${c.url.pathname.replace("/tagmanager/v2/", "")}`)).toEqual([
 			`DELETE ${TAG_PATH}`,
 			`DELETE ${TRIGGER_PATH}`,
@@ -586,15 +530,7 @@ describe("never publish, never delete a container or account", () => {
 			`DELETE ${FOLDER_PATH}`,
 			`DELETE ${WORKSPACE}`,
 			`DELETE ${VERSION}`,
+			`DELETE ${CONTAINER}`,
 		]);
-	});
-
-	it("still allows reading and creating versions on the same paths", () => {
-		expect(() => assertAllowedRequest("GET", CONTAINER)).not.toThrow();
-		expect(() => assertAllowedRequest("GET", "accounts/1")).not.toThrow();
-		expect(() => assertAllowedRequest("PUT", CONTAINER)).not.toThrow();
-		expect(() => assertAllowedRequest("GET", `${CONTAINER}/versions:live`)).not.toThrow();
-		expect(() => assertAllowedRequest("POST", `${WORKSPACE}:create_version`)).not.toThrow();
-		expect(() => assertAllowedRequest("POST", `${WORKSPACE}:quick_preview`)).not.toThrow();
 	});
 });

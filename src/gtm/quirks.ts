@@ -271,4 +271,4 @@ export function createVersionProblem(response: CreateContainerVersionResponse | 
 
 /** Q9: append to every successful write so the model doesn't claim a change is live. */
 export const UNPUBLISHED_CHANGES_NOTE =
-	"This change is saved in the workspace only. It is not live until a version is created (create_version) and a human publishes it in the GTM UI.";
+	"This change is saved in the workspace only. It is not live until a version is created (create_version) and published (publish_version, only with the user's go-ahead, or in the GTM UI).";

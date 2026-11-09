@@ -18,10 +18,9 @@
 //    Build paths with src/gtm/paths.ts. Use `ctx.gtm.listAll()` for every list.
 // 5. Return ok() / okEntity() / okList() / fail() from src/mcp/result.ts. Throwing is fine:
 //    the registry turns any error into fail(error) with a model-friendly message.
-// 6. Writes append UNPUBLISHED_CHANGES_NOTE (src/gtm/quirks.ts, Q9). Deletes take
-//    `confirm: true` and return a preview without it.
-//    Never add a tool that publishes a version or deletes a container or account: the owner
-//    has ruled it out, and src/gtm/client.ts refuses those requests anyway.
+// 6. Writes append UNPUBLISHED_CHANGES_NOTE (src/gtm/quirks.ts, Q9). Deletes, and anything
+//    that changes the live site (publish_version), take `confirm: true` and return a preview
+//    without it. delete_container also wants the container's public ID typed back.
 // 7. Tests: test/tools/<group>.test.ts with the helpers in test/tools/helpers.ts (assert the
 //    outgoing request). Then `pnpm test -u` for the tools/list snapshot, and keep it < 40 KB.
 // ──────────────────────────────────────────────────────────────────────────────────────────

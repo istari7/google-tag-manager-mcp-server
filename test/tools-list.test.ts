@@ -69,7 +69,14 @@ describe("tools/list", () => {
 	it("marks deletes destructive with a confirm argument, and other writes non-destructive", async () => {
 		const { tools } = await toolsList();
 		const destructive = tools.filter((t) => t.annotations?.destructiveHint === true).map((t) => t.name);
-		expect(destructive.sort()).toEqual(["delete_tag", "delete_trigger", "delete_variable"]);
+		expect(destructive.sort()).toEqual([
+			"delete_container",
+			"delete_tag",
+			"delete_trigger",
+			"delete_variable",
+			"delete_workspace",
+			"publish_version",
+		]);
 		for (const t of tools) {
 			const a = t.annotations ?? {};
 			if (a.readOnlyHint === true) continue;
@@ -82,11 +89,10 @@ describe("tools/list", () => {
 		}
 	});
 
-	it("has no tool that publishes or deletes a container or account (owner decision, README)", async () => {
+	it("has no tool that deletes an account (the API has none)", async () => {
 		const { tools } = await toolsList();
 		const names = tools.map((t) => t.name);
 		expect(names.length).toBeGreaterThan(0);
-		expect(names.filter((n) => /publish/i.test(n))).toEqual([]);
-		expect(names.filter((n) => /delete_container|delete_account/i.test(n))).toEqual([]);
+		expect(names.filter((n) => /delete_account/i.test(n))).toEqual([]);
 	});
 });

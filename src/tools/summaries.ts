@@ -6,7 +6,7 @@ import { compact } from "../mcp/result";
 
 /** Q9 (GTM_API_QUIRKS.md): the model must not tell the user that workspace changes are live. */
 export const WORKSPACE_NOT_LIVE_NOTE =
-	"Workspace changes are not live. They reach the site only after a version is created from this workspace (create_version) and a human publishes it in the GTM UI.";
+	"Workspace changes are not live. They reach the site only after a version is created from this workspace (create_version) and published (publish_version, only with the user's go-ahead, or in the GTM UI).";
 
 /** The entity inside a status Entity: its kind, ID and name. */
 export function describeEntity(entity: Entity | undefined) {

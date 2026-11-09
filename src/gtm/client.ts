@@ -6,14 +6,10 @@
 // - listAll(): follows nextPageToken, capped (default 20 pages).
 // - callMethod(): used by the generated wrappers in generated.ts to expand a
 //   Discovery path template and pick query parameters.
-// - assertAllowedRequest(): refuses, before any network call, every `:publish` and every
-//   DELETE of a container or account. The owner has ruled both out for this server (README,
-//   "What this server will never do"); the generated wrappers for them stay in generated.ts
-//   but cannot get past this check.
 //
 // The client never logs, and error messages never include the token.
 
-import { GtmApiError, GtmForbiddenOperationError, MESSAGES, toGtmApiError } from "./errors";
+import { GtmApiError, MESSAGES, toGtmApiError } from "./errors";
 
 export const GTM_API_BASE_URL = "https://tagmanager.googleapis.com/tagmanager/v2/";
 
@@ -108,30 +104,6 @@ export function resolveApiUrl(baseUrl: string, path: string): URL {
 	return url;
 }
 
-/** `accounts/{a}` or `accounts/{a}/containers/{c}`, with nothing after it. */
-const ACCOUNT_OR_CONTAINER = /^accounts\/[^/]+(\/containers\/[^/]+)?$/i;
-
-/**
- * Never publish, never delete a container or account (owner decision; README "What this
- * server will never do"). `path` is API-relative ("accounts/1/containers/2/versions/3:publish"),
- * query string allowed. Checked raw and percent-decoded, so `%3Apublish` is caught too.
- * Throws {@link GtmForbiddenOperationError}; callers check before reading the token or fetching.
- */
-export function assertAllowedRequest(method: string, path: string): void {
-	const raw = path.split(/[?#]/, 1)[0] ?? "";
-	let decoded = raw;
-	try {
-		decoded = decodeURIComponent(raw);
-	} catch {
-		// Malformed escapes: check the raw path only.
-	}
-	const isDelete = method.toUpperCase() === "DELETE";
-	for (const p of [raw, decoded]) {
-		if (/:publish$/i.test(p)) throw new GtmForbiddenOperationError();
-		if (isDelete && ACCOUNT_OR_CONTAINER.test(p)) throw new GtmForbiddenOperationError();
-	}
-}
-
 function parseJson(text: string): unknown {
 	return JSON.parse(text);
 }
@@ -164,17 +136,10 @@ export function createGtmClient(options: GtmClientOptions): GtmClient {
 	const fetchImpl: FetchLike = options.fetch ?? ((input, init) => fetch(input, init));
 	const sleep = options.sleep ?? defaultSleep;
 	const baseUrl = options.baseUrl ?? GTM_API_BASE_URL;
-	const basePath = new URL(baseUrl).pathname;
 	const maxRetries = options.maxRetries ?? MAX_RETRIES;
 
 	async function request<T>(method: HttpMethod, path: string, opts: RequestOptions = {}): Promise<T> {
-		assertAllowedRequest(method, path);
 		const url = resolveApiUrl(baseUrl, path);
-		// Again on the URL actually sent, after the URL parser's normalisation.
-		assertAllowedRequest(
-			method,
-			url.pathname.startsWith(basePath) ? url.pathname.slice(basePath.length) : url.pathname,
-		);
 		encodeQuery(url, opts.query);
 		const token = await options.getToken();
 		const headers: Record<string, string> = { Authorization: `Bearer ${token}`, Accept: "application/json" };
@@ -277,8 +242,6 @@ export function callMethod<T>(
 	let path: string;
 	try {
 		path = expandPath(method, params);
-		// Also here, so a requester other than createGtmClient's is covered.
-		assertAllowedRequest(method.httpMethod, path);
 	} catch (error) {
 		return Promise.reject(error);
 	}

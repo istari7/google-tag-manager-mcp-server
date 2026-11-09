@@ -12,17 +12,14 @@ const SCOPE_LABELS: Record<string, string> = {
 	"https://www.googleapis.com/auth/tagmanager.publish": "Publish container versions",
 	"https://www.googleapis.com/auth/tagmanager.manage.accounts": "View and manage GTM accounts",
 	"https://www.googleapis.com/auth/tagmanager.manage.users": "Manage GTM user permissions",
-	"https://www.googleapis.com/auth/tagmanager.delete.containers": "Delete containers",
+	"https://www.googleapis.com/auth/tagmanager.delete.containers": "Delete containers and workspaces",
 };
 
-/**
- * Scopes this server never needs: it never publishes versions or deletes containers (README,
- * "What this server will never do"). /setup tells the operator to drop them.
- */
-const UNNEEDED_SCOPES = [
-	"https://www.googleapis.com/auth/tagmanager.publish",
-	"https://www.googleapis.com/auth/tagmanager.delete.containers",
-];
+/** Optional scopes and the tools that stop working without them. /setup notes the missing ones. */
+const OPTIONAL_SCOPES: Record<string, string> = {
+	"https://www.googleapis.com/auth/tagmanager.publish": "publish_version",
+	"https://www.googleapis.com/auth/tagmanager.delete.containers": "delete_workspace and delete_container",
+};
 
 const STYLE = `
 :root{color-scheme:light dark;--bg:#fafafa;--fg:#111;--muted:#666;--card:#fff;--border:#ddd;--accent:#1a73e8;--warn:#b26a00}
@@ -156,10 +153,13 @@ export function setupPage(origin: string, s: SetupStatus): Response {
 	const ready = setupReady(s);
 
 	const scopes = s.scopes.map((scope) => `<li><code>${escapeHtml(scope)}</code></li>`).join("");
-	const unneeded = s.scopes.filter((scope) => UNNEEDED_SCOPES.includes(scope));
-	const unneededNote = unneeded.length
-		? `<p class="warn">Not needed: ${unneeded.map((scope) => `<code>${escapeHtml(scope)}</code>`).join(", ")}. This server never publishes versions or deletes containers. Remove ${unneeded.length > 1 ? "them" : "it"} from <code>GOOGLE_SCOPES</code> and the consent screen.</p>`
-		: "";
+	const missing = Object.entries(OPTIONAL_SCOPES).filter(([scope]) => !s.scopes.includes(scope));
+	const missingNote = missing
+		.map(
+			([scope, tools]) =>
+				`<p class="muted">Without <code>${escapeHtml(scope)}</code>, ${tools} will fail with a permission error. Add it to <code>GOOGLE_SCOPES</code> and the consent screen to use ${tools.includes(" and ") ? "them" : "it"}.</p>`,
+		)
+		.join("");
 	const httpNote =
 		protocol === "http:" && !loopback
 			? `<p class="warn">This page was loaded over http. Google only accepts http redirect URIs for localhost, and MCP clients expect https. Use the https address.</p>`
@@ -181,7 +181,7 @@ ${snippet(redirectUri)}
 ${httpNote}
 <p>Scopes requested at sign-in. Add the Tag Manager ones to the consent screen's Data access page:</p>
 <ul>${scopes}</ul>
-${unneededNote}
+${missingNote}
 
 <h2>Connect a client</h2>
 <p>MCP server URL:</p>

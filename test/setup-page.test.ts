@@ -175,11 +175,21 @@ describe("/setup URLs and client snippets", () => {
 		expect(html).toContain("Add custom connector");
 	});
 
-	it("tells the operator to drop tagmanager.publish and delete.containers, which it never uses", async () => {
-		expect(await setupWith({ GOOGLE_SCOPES: READONLY })).not.toContain("Not needed");
+	it("names the tools that fail when tagmanager.publish or delete.containers is missing", async () => {
+		const without = await setupWith({ GOOGLE_SCOPES: READONLY });
+		expect(without).toContain(`Without <code>${PUBLISH}</code>, publish_version will fail`);
+		expect(without).toContain(
+			`Without <code>${DELETE_CONTAINERS}</code>, delete_workspace and delete_container will fail`,
+		);
 		const html = await setupWith({ GOOGLE_SCOPES: `${READONLY} ${PUBLISH} ${DELETE_CONTAINERS}` });
-		expect(html).toContain(`Not needed: <code>${PUBLISH}</code>, <code>${DELETE_CONTAINERS}</code>.`);
-		expect(html).toContain("never publishes versions or deletes containers");
+		expect(html).not.toContain("Without <code>");
+	});
+
+	it("requests tagmanager.publish and delete.containers by default (wrangler.jsonc)", async () => {
+		const html = await (await workerFetch("/setup")).text();
+		expect(html).toContain(`<code>${PUBLISH}</code>`);
+		expect(html).toContain(`<code>${DELETE_CONTAINERS}</code>`);
+		expect(html).not.toContain("Without <code>");
 	});
 
 	it("lists the requested scopes, including the identity scopes", async () => {

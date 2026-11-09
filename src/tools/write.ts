@@ -39,11 +39,13 @@ export interface DeleteOptions<T> {
 	/** Extra read-only facts for the preview, e.g. which tags use a trigger. */
 	related?: (entity: T) => Promise<Record<string, unknown>>;
 	remove: () => Promise<void>;
+	/** Replaces UNPUBLISHED_CHANGES_NOTE after the delete, for deletes that are not workspace edits. */
+	note?: string;
 }
 
 /**
  * Without `confirm: true`: read the entity and describe what would be deleted. No write.
- * With it: DELETE, and say the deletion is not live until a version is published in the GTM UI (Q9).
+ * With it: DELETE, and say the deletion is not live until a version is published (Q9).
  */
 export async function deleteWithConfirm<T>(options: DeleteOptions<T>): Promise<CallToolResult> {
 	const { kind, id } = options;
@@ -57,5 +59,5 @@ export async function deleteWithConfirm<T>(options: DeleteOptions<T>): Promise<C
 		});
 	}
 	await options.remove();
-	return okWrite({ deleted: { kind, id } });
+	return okWrite({ deleted: { kind, id } }, options.note === undefined ? {} : { note: options.note });
 }
