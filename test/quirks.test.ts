@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from "vitest";
 import { listAll } from "../src/gtm/client";
-import { accounts, type Tag, type Trigger, type Variable } from "../src/gtm/generated";
+import { accounts, type CustomTemplate, type Tag, type Trigger, type Variable } from "../src/gtm/generated";
 import {
 	createTag,
 	createTrigger,
@@ -13,6 +13,7 @@ import {
 	stripServerFields,
 	updateFolder,
 	updateTag,
+	updateTemplate,
 	updateTrigger,
 	updateVariable,
 } from "../src/gtm/merge";
@@ -358,11 +359,39 @@ describe("Q7 omitted list vs empty list", () => {
 	});
 });
 
-describe("Q8 template update fingerprint (unverified)", () => {
-	it("Q8 our generic update path never puts the fingerprint in the body", () => {
+describe("Q8 template update fingerprint (unverified: sent as query and body)", () => {
+	const TEMPLATE_PATH = `${WORKSPACE}/templates/3`;
+	const stored: CustomTemplate = {
+		templateId: "3",
+		name: "T",
+		templateData: "data.gtmOnSuccess();",
+		fingerprint: "f1",
+		path: TEMPLATE_PATH,
+	};
+
+	it("Q8 the generic update path (every other entity) never puts the fingerprint in the body", () => {
 		expect(prepareUpdate({ templateId: "1", fingerprint: "f" }, {}).body).toEqual({ templateId: "1" });
 	});
-	it.todo("Q8 verify against the sandbox whether templates.update needs the fingerprint in the body");
+
+	it("Q8 updateTemplate sends the stored fingerprint as ?fingerprint= and in the body, not the patch's", async () => {
+		const { client, calls } = getPutClient(stored);
+		await updateTemplate(client, TEMPLATE_PATH, { name: "U", fingerprint: "attacker-chosen" });
+		expect(calls.map((c) => c.method)).toEqual(["GET", "PUT"]);
+		expect(calls[1]?.url.searchParams.get("fingerprint")).toBe("f1");
+		expect(calls[1]?.body).toEqual({ ...stored, name: "U", fingerprint: "f1" });
+	});
+
+	it("Q8 a stale expectedFingerprint fails before any write, whichever fingerprint Google reads", async () => {
+		const { client, calls } = getPutClient(stored);
+		await expect(
+			updateTemplate(client, TEMPLATE_PATH, { name: "U" }, { expectedFingerprint: "f0" }),
+		).rejects.toMatchObject({ status: 409, kind: "conflict" });
+		expect(calls.map((c) => c.method)).toEqual(["GET"]);
+	});
+
+	it.todo(
+		"Q8 live: does templates.update reject a stale ?fingerprint= (body current) and a stale body fingerprint (query current) with 409/412?",
+	);
 });
 
 describe("Q9 workspace edits are not live until published", () => {

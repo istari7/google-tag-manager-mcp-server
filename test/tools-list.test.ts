@@ -74,6 +74,7 @@ describe("tools/list", () => {
 			"delete_folder",
 			"delete_gtag_config",
 			"delete_tag",
+			"delete_template",
 			"delete_trigger",
 			"delete_user_permission",
 			"delete_variable",

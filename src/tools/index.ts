@@ -6,7 +6,9 @@ import { accountTools } from "./accounts";
 import { builtInTools } from "./builtins";
 import { folderTools } from "./folders";
 import { gtagConfigTools } from "./gtag-configs";
+import { guidanceTools } from "./guidance";
 import { tagTools } from "./tags";
+import { templateTools } from "./templates";
 import { triggerTools } from "./triggers";
 import { userTools } from "./users";
 import { utilityTools } from "./utility";
@@ -25,5 +27,7 @@ export const TOOL_GROUPS: readonly ToolGroup[] = [
 	builtInTools,
 	folderTools,
 	gtagConfigTools,
+	templateTools, // group: templates
+	guidanceTools, // group: guidance
 	versionTools,
 ];

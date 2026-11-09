@@ -103,6 +103,12 @@ settings or access, which are not versioned.
 | | `delete_folder` | Deletes a folder; the preview lists what is in it, which is kept | destructive |
 | Google tag configs | `list_gtag_configs` | Lists the Google tag configs GTM creates with GA4, Ads and Floodlight tags | read |
 | | `delete_gtag_config` | Deletes a Google tag config, e.g. one left behind after its tag was deleted | destructive |
+| Custom templates | `list_templates` | Lists custom templates with the `cvt_…` type their tags or variables use (no template code) | read |
+| | `get_template` | Gets one template with its `.tpl` code (optionally without it) | read |
+| | `create_template`, `update_template` | Creates a template from `.tpl` code / changes its name or code (other fields are kept) | write |
+| | `import_gallery_template` | Imports a Community Template Gallery template by GitHub owner and repository, accepting its declared permissions | write |
+| | `delete_template` | Deletes a template; the preview lists the tags and variables that use it | destructive |
+| Guidance | `get_tag_templates`, `get_trigger_templates` | Example `create_tag` / `create_trigger` arguments for common tag and trigger types (no API call) | read |
 | Versions | `create_version` | Saves the workspace as a new container version. Does not publish. Refuses when there are no changes or there are merge conflicts | write |
 | | `publish_version` | Makes a version live; the preview shows the version and what is live now | destructive |
 | | `get_live_version` | Gets the currently published version | read |
@@ -267,7 +273,7 @@ The Worker asks Google for `openid email profile` (to identify you) plus the sco
 | Scope (`https://www.googleapis.com/auth/…`) | Needed for |
 |---|---|
 | `tagmanager.readonly` | Every read tool |
-| `tagmanager.edit.containers` | Creating workspaces; creating, updating and deleting tags, triggers, variables, folders, built-in variables and Google tag configs |
+| `tagmanager.edit.containers` | Creating workspaces; creating, updating and deleting tags, triggers, variables, folders, built-in variables, Google tag configs and custom templates |
 | `tagmanager.edit.containerversions` | `create_version` |
 | `tagmanager.publish` | `publish_version` |
 | `tagmanager.delete.containers` | `delete_workspace`, `delete_container` |

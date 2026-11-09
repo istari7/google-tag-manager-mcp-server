@@ -139,17 +139,37 @@ Add an entry whenever manual testing turns up something new, with a test.
   tools/tags: `Q7/Q12: [] clears firing triggers and "" clears notes…`;
   tools/triggers: `Q7: filter: [] clears the conditions; the other filter lists are kept`.
 
-### Q8. Template update puts the fingerprint in the body (unverified)
+### Q8. Template update: fingerprint in the query, the body, or both (unverified)
 
-- **Google:** unverified. `CustomTemplate` has a `fingerprint` field, and it
-  is not clear whether `templates.update` expects it in the body, as the
-  `?fingerprint=` query parameter (like every other update, Q2), or accepts
-  both.
-- **We:** templates are in the backlog. Our generic update path always uses
-  the query parameter and strips the body fingerprint. Check this against the
-  sandbox container before adding template tools.
-- **Tests:** `Q8 our generic update path never puts the fingerprint in the body`;
-  `Q8 verify against the sandbox…` is an `it.todo`.
+- **Google:** unverified. The Discovery document declares a `fingerprint`
+  query parameter on `templates.update`, like every other update (Q2), and
+  `CustomTemplate` also has a `fingerprint` field. Paolo's Go server sends it
+  only in the body and its update works, so Google at least accepts a body
+  fingerprint. Which one Google actually checks is not known.
+- **We:** `updateTemplate` (`merge.ts`) GETs the template, merges, and sends
+  the **stored** fingerprint both as `?fingerprint=` and in the body (never
+  one from the patch). Both carry the same value, so whichever one Google
+  reads, an unchanged template is accepted and one changed since our GET is
+  refused. The model's own stale read is caught before any write by
+  `expectedFingerprint` (the `fingerprint` argument of `update_template`), as
+  for every other entity. Every other entity still uses the query parameter
+  only.
+- **Still to verify live** (sandbox container, a throwaway custom template):
+  1. `update_template` with no `fingerprint` succeeds (proves that sending
+     both is accepted, no 400).
+  2. A raw PUT with a stale `?fingerprint=` and the current body fingerprint:
+     409/412 means Google checks the query parameter.
+  3. A raw PUT with the current `?fingerprint=` and a stale body fingerprint:
+     409/412 means Google checks the body; success means the body value is
+     ignored (then the body copy can be dropped).
+  4. A PUT that sends `galleryReference` back unchanged on a gallery import
+     keeps the gallery link (Q1 makes us send it; whether GTM sets
+     `isModified` after a `templateData` change is also unknown).
+- **Tests:** `Q8 the generic update path (every other entity) never puts the fingerprint in the body`,
+  `Q8 updateTemplate sends the stored fingerprint as ?fingerprint= and in the body, not the patch's`,
+  `Q8 a stale expectedFingerprint fails before any write…`; `Q8 live: …` is an
+  `it.todo` for steps 2 and 3; tools/templates:
+  `Q1/Q8: GET, then PUT of the whole template with the stored fingerprint…`.
 
 ### Q9. Workspace edits are not live until a version is created and published
 
@@ -410,3 +430,21 @@ Add an entry whenever manual testing turns up something new, with a test.
   confirmed, it moves them out of any folder (`move_entities_to_folder` to
   folder `0`, Q19), then deletes the folder, so nothing in it is lost.
 - **Tests:** tools/folders: `Q25 with confirm: true moves the contents out (folder 0) before the DELETE`.
+
+## Custom templates
+
+### Q26. The API never says what type a template's tags have
+
+- **Google:** a tag or variable built from a custom template has a type of
+  the form `cvt_…`, but `CustomTemplate` has no field for it. Paolo's server
+  derives `cvt_<containerId>_<templateId>` for templates made in the
+  container and `cvt_<galleryTemplateId>` for Community Template Gallery
+  imports (he changed the gallery rule after using it; we have not checked
+  either form live).
+- **We:** `templateType` (`src/tools/templates.ts`) applies the same rule
+  (container ID from `containerId`, else from `path`), and every template
+  result carries it as `type`, next to `for` (tag, variable or client, read
+  from the `___INFO___` section of `templateData`). `delete_template` lists
+  the tags and variables with that type in its preview.
+- **Tests:** tools/templates: `templateType: cvt_<containerId>_<templateId>, or cvt_<galleryTemplateId> for gallery imports`,
+  `without confirm: true previews, listing the tags and variables of the template's type`.
