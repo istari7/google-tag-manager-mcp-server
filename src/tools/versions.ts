@@ -16,7 +16,7 @@ const versions = accounts.containers.versions;
 const versionHeaders = accounts.containers.versionHeaders;
 const workspaces = accounts.containers.workspaces;
 
-function versionRow(h: ContainerVersionHeader) {
+export function versionRow(h: ContainerVersionHeader) {
 	return {
 		containerVersionId: h.containerVersionId,
 		name: h.name,
@@ -28,7 +28,7 @@ function versionRow(h: ContainerVersionHeader) {
 }
 
 /** The live version, or undefined when nothing has been published yet (404). */
-async function liveVersion(gtm: GtmClient, parent: string): Promise<ContainerVersion | undefined> {
+export async function liveVersion(gtm: GtmClient, parent: string): Promise<ContainerVersion | undefined> {
 	try {
 		return await versions.live(gtm, { parent });
 	} catch (error) {
@@ -118,9 +118,16 @@ export const versionTools: ToolGroup = (tools) => {
 					]);
 					if (version.deleted) return fail(`Version ${containerVersionId} is deleted, so it cannot be published.`);
 					const alreadyLive = live?.containerVersionId === containerVersionId;
+					// Every tag with its paused state spelled out: an active tag fires once published.
+					const tags = version.tag?.map((t) => ({
+						tagId: t.tagId,
+						name: t.name,
+						type: t.type,
+						paused: t.paused === true,
+					}));
 					return okPreview(
 						{
-							wouldPublish: summarizeVersion(version) ?? {},
+							wouldPublish: { ...summarizeVersion(version), ...(tags ? { tags } : {}) },
 							currentlyLive: live
 								? { containerVersionId: live.containerVersionId, name: live.name }
 								: "nothing (this container has never been published)",
@@ -164,7 +171,8 @@ export const versionTools: ToolGroup = (tools) => {
 	tools.add(
 		"list_versions",
 		{
-			description: "List a container's saved versions, newest first, with tag/trigger/variable counts.",
+			description:
+				"List a container's saved versions, newest first, with tag/trigger/variable counts. The published one has live: true.",
 			input: containerInput.extend({
 				includeDeleted: z.boolean().optional().describe("Also list deleted versions"),
 			}),
@@ -176,10 +184,16 @@ export const versionTools: ToolGroup = (tools) => {
 				(pageToken) => versionHeaders.list(gtm, { parent, pageToken, includeDeleted }),
 				(page) => page.containerVersionHeader,
 			);
+			// Version headers don't say which one is live, so ask (after the list, so a bad ID
+			// fails on the first call). undefined when nothing was ever published.
+			const liveId = (await liveVersion(gtm, parent))?.containerVersionId;
 			const items = [...list.items].sort(
 				(a, b) => Number(b.containerVersionId ?? 0) - Number(a.containerVersionId ?? 0),
 			);
-			return okList("versions", { ...list, items }, versionRow);
+			return okList("versions", { ...list, items }, (h) => ({
+				...versionRow(h),
+				live: (liveId !== undefined && h.containerVersionId === liveId) || undefined,
+			}));
 		},
 	);
 };

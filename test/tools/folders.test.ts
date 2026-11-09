@@ -3,7 +3,18 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UNPUBLISHED_CHANGES_NOTE } from "../../src/gtm/quirks";
 import { folder } from "../fixtures/gtm";
-import { byMethod, callTool, describeCall, empty, json, mockGtm, queryAll, WORKSPACE, WORKSPACE_ARGS } from "./helpers";
+import {
+	byMethod,
+	callTool,
+	describeCall,
+	empty,
+	json,
+	mockGtm,
+	queryAll,
+	WORKSPACE,
+	WORKSPACE_ARGS,
+	writes,
+} from "./helpers";
 
 afterEach(() => {
 	vi.restoreAllMocks();
@@ -93,17 +104,24 @@ describe("delete_folder", () => {
 			}),
 		});
 		const result = await callTool("delete_folder", ARGS);
-		expect(mock.gtm().map((c) => `${c.method} ${describeCall(c).path}`)).toEqual([
-			`GET ${FOLDER}`,
-			`POST ${FOLDER}:entities`,
-		]);
+		expect(
+			mock
+				.gtm()
+				.map((c) => `${c.method} ${describeCall(c).path}`)
+				.sort(),
+		).toEqual([`GET ${FOLDER}`, `POST ${FOLDER}:entities`]);
+		expect(writes(mock.gtm()).filter((c) => !c.url.includes(":entities"))).toHaveLength(0);
 		expect(result.json()).toEqual({
 			preview: true,
 			wouldDelete: {
 				kind: "folder",
 				folderId: "9",
 				name: "Marketing",
-				contains: ['tag 12 "GA4 - Event - sign_up"', 'variable 56 "DLV - user_id"'],
+				// Objects, like delete_trigger's usedByTags.
+				contains: {
+					tags: [{ tagId: "12", name: "GA4 - Event - sign_up" }],
+					variables: [{ variableId: "56", name: "DLV - user_id" }],
+				},
 				containsNote: "These are kept, outside any folder.",
 			},
 			message:
@@ -133,7 +151,7 @@ describe("delete_folder", () => {
 			[MOVE]: byMethod({ POST: empty }),
 			[FOLDER]: byMethod({ DELETE: empty }),
 		});
-		await callTool("delete_folder", { ...ARGS, confirm: true });
+		const result = await callTool("delete_folder", { ...ARGS, confirm: true });
 		const calls = mock.gtm();
 		expect(calls.map((c) => `${c.method} ${describeCall(c).path}`)).toEqual([
 			`POST ${FOLDER}:entities`,
@@ -143,5 +161,11 @@ describe("delete_folder", () => {
 		expect(queryAll(calls[1], "tagId")).toEqual(["12"]);
 		expect(queryAll(calls[1], "variableId")).toEqual(["56"]);
 		expect(queryAll(calls[1], "triggerId")).toEqual([]);
+		// The result says what was moved out, in the same object shape as the preview.
+		expect(result.json()).toEqual({
+			deleted: { kind: "folder", id: "9" },
+			movedOutOfFolder: { tags: [{ tagId: "12", name: "T" }], variables: [{ variableId: "56", name: "V" }] },
+			note: UNPUBLISHED_CHANGES_NOTE,
+		});
 	});
 });

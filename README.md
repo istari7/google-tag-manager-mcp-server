@@ -62,9 +62,10 @@ on your website changes until a version is published. *admin* changes account se
 access, which apply immediately. *destructive* deletes something, changes who has access, or
 publishes a version, and needs `confirm: true` (without it, the tool returns a preview of what it
 would do). Workspace edits reach your site only when a version is published, but some tools act
-the moment they are confirmed: `publish_version` and `delete_container` change what your sites
-load, and `update_account`, `set_user_permission` and `delete_user_permission` change account
-settings or access, which are not versioned.
+the moment they are confirmed: `publish_version`, `delete_container`, `combine_containers` and
+`move_tag_id` change what your sites load, and `update_account`, `update_container`,
+`set_user_permission` and `delete_user_permission` change account or container settings or
+access, which are not versioned.
 
 | Group | Tool | What it does | Kind |
 |---|---|---|---|
@@ -81,7 +82,9 @@ settings or access, which are not versioned.
 | | `set_user_permission` | Adds a user or changes their account / container access; the preview shows before and after | destructive |
 | | `delete_user_permission` | Removes a user from an account | destructive |
 | Workspaces | `list_workspaces` | Lists a container's workspaces | read |
+| | `get_workspace` | Gets a workspace's name, description and fingerprint | read |
 | | `create_workspace` | Creates a workspace (containers allow only a few) | write |
+| | `update_workspace` | Renames a workspace or changes its description (other fields are kept) | write |
 | | `delete_workspace` | Deletes a workspace and its unversioned changes; the preview counts them | destructive |
 | | `get_workspace_status` | Shows pending changes and merge conflicts | read |
 | | `quick_preview_workspace` | Checks a workspace compiles by building a throwaway preview; saves and publishes nothing | read |
@@ -100,13 +103,31 @@ settings or access, which are not versioned.
 | Folders | `list_folders` | Lists folders | read |
 | | `create_folder` | Creates a folder | write |
 | | `move_entities_to_folder` | Moves tags, triggers and variables into a folder (folder `0` = out of any folder) | write |
-| | `delete_folder` | Deletes a folder; the preview lists what is in it, which is kept | destructive |
+| | `delete_folder` | Deletes a folder; the preview lists what is in it, which is kept, and the result says what was moved out | destructive |
 | Google tag configs | `list_gtag_configs` | Lists the Google tag configs GTM creates with GA4, Ads and Floodlight tags | read |
 | | `delete_gtag_config` | Deletes a Google tag config, e.g. one left behind after its tag was deleted | destructive |
 | Versions | `create_version` | Saves the workspace as a new container version. Does not publish. Refuses when there are no changes or there are merge conflicts | write |
-| | `publish_version` | Makes a version live; the preview shows the version and what is live now | destructive |
+| | `publish_version` | Makes a version live; the preview shows the version (each tag's paused state) and what is live now | destructive |
 | | `get_live_version` | Gets the currently published version | read |
-| | `list_versions` | Lists container versions | read |
+| | `list_versions` | Lists container versions and marks the live one | read |
+| Version admin | `get_version` | Summarises a saved version (or returns all of it with `full: true`) | read |
+| | `get_latest_version_header` | Gets the latest version, the base new workspaces start from (may differ from live) | read |
+| | `update_version` | Renames a version or changes its description | write |
+| | `delete_version` | Deletes (archives) a version other than the live one; `undelete_version` restores it | destructive |
+| | `undelete_version` | Restores a deleted version; needs `confirm: true` | write |
+| | `set_latest_version` | Makes a version the latest (the base for new workspaces and syncs); does not publish; needs `confirm: true` | write |
+| Workspace admin | `sync_workspace` | Brings a workspace's unchanged entities up to the latest version; clashes become merge conflicts; needs `confirm: true` | write |
+| | `resolve_workspace_conflict` | Replaces a conflicting tag, trigger, variable or folder with the resolved one; the preview shows both sides | destructive |
+| | `bulk_update_workspace` | Adds, updates and deletes several tags, triggers, variables and folders in one call (new IDs `new_1`, `new_2`, …) | destructive |
+| Reverts | `revert_workspace_entity` | Discards a workspace's changes to one tag, trigger, variable, folder, zone, template, client, transformation or built-in variable; the preview shows what is undone | destructive |
+| Folder admin | `get_folder` | Gets a folder with its fingerprint | read |
+| | `update_folder` | Renames a folder or changes its notes (other fields are kept) | write |
+| | `get_folder_entities` | Lists the tags, triggers and variables in a folder | read |
+| Container admin | `get_container` | Gets a container's settings, tag IDs, features and fingerprint | read |
+| | `create_container` | Creates a container (web, android, ios, amp or server) | admin |
+| | `update_container` | Changes a container's name, domains, notes or server URLs (other fields are kept) | admin |
+| | `combine_containers` | Merges another container of the account into this one; the preview shows both | destructive |
+| | `move_tag_id` | Moves a tag ID out into a new container; confirming also needs `acceptTerms: true` | destructive |
 
 The server also offers best-practices guides as MCP resources (`gtm://best-practices`).
 
@@ -123,8 +144,11 @@ These tools change your live site or remove work for good, so each one takes two
 - **`delete_container`** deletes a container, its workspaces and its versions. Besides
   `confirm: true` it needs the container's public ID (`GTM-XXXXXXX`) typed back, so a wrong
   numeric ID can't delete the wrong container.
+- **`combine_containers`** and **`move_tag_id`** change which container a tag ID loads, at once.
+  Their previews show the containers involved; `move_tag_id` also needs `acceptTerms: true` for
+  the terms of service copied to the new container, and never copies users.
 
-They need the `tagmanager.publish` and `tagmanager.delete.containers` scopes. If you'd rather not
+`publish_version`, `delete_workspace` and `delete_container` need the `tagmanager.publish` and `tagmanager.delete.containers` scopes. If you'd rather not
 allow them, leave those scopes out of `GOOGLE_SCOPES` and the consent screen: the tools then fail
 with a permission error, and `/setup` lists which tools are affected. There is no tool to delete
 an account (the API has no such method).
@@ -137,7 +161,10 @@ an account (the API has no such method).
 - **Per-client consent.** Each MCP client must be approved on a consent page before the Google
   sign-in. The approval is remembered in that browser for 30 days.
 - **`confirm: true`** is required by every *destructive* tool: the `delete_*` tools,
-  `disable_built_in_variables`, `set_user_permission` and `publish_version`. Without it they only
+  `disable_built_in_variables`, `set_user_permission`, `publish_version`,
+  `revert_workspace_entity`, `resolve_workspace_conflict`, `bulk_update_workspace`,
+  `combine_containers` and `move_tag_id` (which also needs `acceptTerms: true`), and by the
+  hard-to-undo `sync_workspace`, `undelete_version` and `set_latest_version`. Without it they only
   describe what would happen. `delete_container` also needs the container's public ID, and the
   user-access tools warn when the change is to your own access.
 - **No lost edits.** GTM updates replace the whole object. Update tools read the current entity,

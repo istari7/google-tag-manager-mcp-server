@@ -1,14 +1,19 @@
 import { z } from "zod";
-import { accounts, type QuickPreviewResponse } from "../gtm/generated";
+import { accounts, type QuickPreviewResponse, type Workspace } from "../gtm/generated";
+import { getMergePut } from "../gtm/merge";
 import { containerPath, workspacePath } from "../gtm/paths";
 import type { ToolGroup } from "../mcp/registry";
-import { fail, ok, okList } from "../mcp/result";
+import { fail, ok, okEntity, okList } from "../mcp/result";
 import { deleteWithConfirm } from "./confirm";
-import { confirmInput, containerInput, nameInput, workspaceInput } from "./inputs";
+import { confirmInput, containerInput, fingerprintInput, nameInput, workspaceInput } from "./inputs";
 import { summarizeWorkspaceStatus, versionCounts, WORKSPACE_NOT_LIVE_NOTE } from "./summaries";
-import { okWrite } from "./write";
+import { isEmptyPatch, okWrite } from "./write";
 
 const workspaces = accounts.containers.workspaces;
+
+function workspaceSummary(w: Workspace) {
+	return { workspaceId: w.workspaceId, name: w.name, description: w.description, fingerprint: w.fingerprint };
+}
 
 /** Why a quick preview did not compile, or undefined when it did (the Q20 shapes). */
 export function quickPreviewProblem(response: QuickPreviewResponse | undefined): string | undefined {
@@ -40,6 +45,46 @@ export const workspaceTools: ToolGroup = (tools) => {
 				name: w.name,
 				description: w.description,
 			}));
+		},
+	);
+
+	tools.add(
+		"get_workspace",
+		{
+			description: "Get a workspace's name and description, plus its fingerprint for update_workspace.",
+			input: workspaceInput,
+			annotations: { readOnlyHint: true },
+		},
+		async (ids, { gtm }) => okEntity(workspaceSummary(await workspaces.get(gtm, { path: workspacePath(ids) }))),
+	);
+
+	tools.add(
+		"update_workspace",
+		{
+			description: "Rename a workspace or change its description. Omitted fields are kept.",
+			input: workspaceInput.extend({
+				name: z.string().trim().min(1).max(256).optional(),
+				description: z.string().optional().describe('"" clears it'),
+				fingerprint: fingerprintInput,
+			}),
+			annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+		},
+		async ({ name, description, fingerprint, ...ids }, { gtm }) => {
+			if (isEmptyPatch({ name, description })) return fail("Nothing to change: pass name and/or description.");
+			const path = workspacePath(ids);
+			// Q1/Q2: workspaces.update is a PUT, so get-merge-put keeps the fields left out.
+			const { result } = await getMergePut<Workspace, Partial<Workspace>>({
+				path,
+				patch: { name, description },
+				expectedFingerprint: fingerprint,
+				get: () => workspaces.get(gtm, { path }),
+				put: (body, fp) => workspaces.update(gtm, { path, fingerprint: fp }, body),
+				normalize: (patch) => ({ value: patch, warnings: [] }),
+			});
+			return okWrite(
+				{ workspace: workspaceSummary(result) },
+				{ note: "Only the workspace's name or description changed; nothing on the site changed." },
+			);
 		},
 	);
 

@@ -70,6 +70,8 @@ describe("tools/list", () => {
 		const { tools } = await toolsList();
 		const destructive = tools.filter((t) => t.annotations?.destructiveHint === true).map((t) => t.name);
 		expect(destructive.sort()).toEqual([
+			"bulk_update_workspace",
+			"combine_containers",
 			"delete_container",
 			"delete_folder",
 			"delete_gtag_config",
@@ -77,9 +79,13 @@ describe("tools/list", () => {
 			"delete_trigger",
 			"delete_user_permission",
 			"delete_variable",
+			"delete_version",
 			"delete_workspace",
 			"disable_built_in_variables",
+			"move_tag_id",
 			"publish_version",
+			"resolve_workspace_conflict",
+			"revert_workspace_entity",
 			"set_user_permission",
 		]);
 		for (const t of tools) {

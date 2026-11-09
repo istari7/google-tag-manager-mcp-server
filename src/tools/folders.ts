@@ -2,34 +2,47 @@ import type { GtmClient } from "../gtm/client";
 import { accounts } from "../gtm/generated";
 import { folderPath, workspacePath } from "../gtm/paths";
 import type { ToolGroup } from "../mcp/registry";
-import { fail, okList } from "../mcp/result";
-import { deleteWithConfirm } from "./confirm";
+import { compact, fail, okList } from "../mcp/result";
+import { confirmGate, okPreview } from "./confirm";
 import { confirmInput, gtmId, idList, nameInput, notesInput, workspaceInput } from "./inputs";
 import { okWrite } from "./write";
 
 const folders = accounts.containers.workspaces.folders;
 
-/** Everything in a folder. folders.entities is a POST but only reads (Discovery: "List all entities in a GTM Folder"). */
-async function folderContents(gtm: GtmClient, path: string) {
+/**
+ * Everything in a folder, one `{ tagId, name, type }`-style row per entity (the shape delete
+ * previews use for related entities, like delete_trigger's usedByTags). folders.entities is
+ * a POST but only reads (Discovery: "List all entities in a GTM Folder").
+ */
+export async function folderContents(gtm: GtmClient, path: string) {
 	const pages = await gtm.listAll(
 		(pageToken) => folders.entities(gtm, { path, pageToken }),
 		(page) => [page],
 	);
-	const tags = pages.items.flatMap((p) => p.tag ?? []);
-	const triggers = pages.items.flatMap((p) => p.trigger ?? []);
-	const variables = pages.items.flatMap((p) => p.variable ?? []);
-	const defined = (list: (string | undefined)[]) => list.filter((id): id is string => id !== undefined);
+	const all = pages.items;
 	return {
-		tagId: defined(tags.map((t) => t.tagId)),
-		triggerId: defined(triggers.map((t) => t.triggerId)),
-		variableId: defined(variables.map((v) => v.variableId)),
-		labels: [
-			...tags.map((t) => `tag ${t.tagId} "${t.name}"`),
-			...triggers.map((t) => `trigger ${t.triggerId} "${t.name}"`),
-			...variables.map((v) => `variable ${v.variableId} "${v.name}"`),
-		],
+		tags: all.flatMap((p) => p.tag ?? []).map((t) => ({ tagId: t.tagId, name: t.name, type: t.type })),
+		triggers: all.flatMap((p) => p.trigger ?? []).map((t) => ({ triggerId: t.triggerId, name: t.name, type: t.type })),
+		variables: all
+			.flatMap((p) => p.variable ?? [])
+			.map((v) => ({ variableId: v.variableId, name: v.name, type: v.type })),
 	};
 }
+
+export type FolderContents = Awaited<ReturnType<typeof folderContents>>;
+
+const defined = (list: (string | undefined)[]) => list.filter((id): id is string => id !== undefined);
+
+/** The contents without `type`: what delete_folder lists. compact() drops empty lists. */
+function contentsRows(c: FolderContents) {
+	return compact({
+		tags: c.tags.map(({ tagId, name }) => ({ tagId, name })),
+		triggers: c.triggers.map(({ triggerId, name }) => ({ triggerId, name })),
+		variables: c.variables.map(({ variableId, name }) => ({ variableId, name })),
+	});
+}
+
+const isEmpty = (c: FolderContents) => c.tags.length + c.triggers.length + c.variables.length === 0;
 
 export const folderTools: ToolGroup = (tools) => {
 	tools.add(
@@ -98,29 +111,41 @@ export const folderTools: ToolGroup = (tools) => {
 		},
 		async ({ confirm, ...ids }, { gtm }) => {
 			const path = folderPath(ids);
-			return deleteWithConfirm({
+			return confirmGate({
 				confirm,
-				toolName: "delete_folder",
-				kind: "folder",
-				id: ids.folderId,
-				get: () => folders.get(gtm, { path }),
-				summarize: (f) => ({ folderId: f.folderId, name: f.name }),
-				related: async () => {
-					const { labels } = await folderContents(gtm, path);
-					return { contains: labels, containsNote: labels.length ? "These are kept, outside any folder." : undefined };
+				preview: async () => {
+					const [f, contents] = await Promise.all([folders.get(gtm, { path }), folderContents(gtm, path)]);
+					return okPreview(
+						{
+							wouldDelete: compact({
+								kind: "folder",
+								folderId: f.folderId,
+								name: f.name,
+								contains: contentsRows(contents),
+								containsNote: isEmpty(contents) ? undefined : "These are kept, outside any folder.",
+							}),
+						},
+						"Nothing was deleted. To delete this folder, get the user's go-ahead, then call delete_folder again with confirm: true.",
+					);
 				},
-				// Q25: GTM refuses to delete a folder that still holds anything, so move its contents
-				// out first (folder "0", Q19), then delete it.
-				remove: async () => {
-					const { tagId, triggerId, variableId } = await folderContents(gtm, path);
-					if (tagId.length + triggerId.length + variableId.length > 0) {
+				apply: async () => {
+					// Q25: GTM refuses to delete a folder that still holds anything, so move its contents
+					// out first (folder "0", Q19), then delete it.
+					const contents = await folderContents(gtm, path);
+					if (!isEmpty(contents)) {
 						await folders.moveEntitiesToFolder(
 							gtm,
-							{ path: folderPath({ ...ids, folderId: "0" }), tagId, triggerId, variableId },
+							{
+								path: folderPath({ ...ids, folderId: "0" }),
+								tagId: defined(contents.tags.map((t) => t.tagId)),
+								triggerId: defined(contents.triggers.map((t) => t.triggerId)),
+								variableId: defined(contents.variables.map((v) => v.variableId)),
+							},
 							{},
 						);
 					}
 					await folders.delete(gtm, { path });
+					return okWrite({ deleted: { kind: "folder", id: ids.folderId }, movedOutOfFolder: contentsRows(contents) });
 				},
 			});
 		},
