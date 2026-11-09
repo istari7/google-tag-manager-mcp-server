@@ -60,17 +60,19 @@ MCP client ──OAuth──▶ your Worker (/authorize, /token, /mcp) ──▶
 ## Tools
 
 **Kind:** *read* changes nothing. *write* changes a workspace or creates a version, but nothing
-on your website changes until a version is published. *admin* changes account settings or user
-access, which apply immediately. *destructive* deletes something, changes who has access, or
-publishes a version, and needs `confirm: true` (without it, the tool returns a preview of what it
-would do). Workspace edits reach your site only when a version is published, but some tools act
-the moment they are confirmed: `publish_version` and `delete_container` change what your sites
-load, and `update_account`, `set_user_permission` and `delete_user_permission` change account
-settings or access, which are not versioned. Environment tools and `link_destination` also act at
-once, at container level.
+on your website changes until a version is published. *admin* changes account or container
+settings, which apply immediately. *destructive* deletes something, changes who has access, or
+changes what your sites load, and needs `confirm: true` (without it, the tool returns a preview
+of what it would do). Workspace edits reach your site only when a version is published, but some
+tools act the moment they are confirmed: `publish_version`, `delete_container`,
+`combine_containers` and `move_tag_id` change what your sites load; `update_account`,
+`update_container`, `set_user_permission` and `delete_user_permission` change account or
+container settings or access, which are not versioned; the environment tools and
+`link_destination` also act at once, at container level.
 
 The **Group** column is the tool group that [`GTM_TOOL_GROUPS`](#tool-groups) switches on.
-Groups marked *optional* are off unless you enable them.
+Groups marked *optional* are off unless you enable them. A test (`test/readme.test.ts`) checks
+that this table lists every tool, in its group.
 
 | Group | Tool | What it does | Kind |
 |---|---|---|---|
@@ -84,14 +86,18 @@ Groups marked *optional* are off unless you enable them.
 | | `get_container_snippet` | Returns the container's install code: the `<head>` script and the `<noscript>` body part | read |
 | | `delete_container` | Deletes a container for good; needs `confirm: true` and its public ID typed back by you (the preview masks it) | destructive |
 | `workspaces` | `list_workspaces` | Lists a container's workspaces | read |
+| | `get_workspace` | Gets a workspace's name, description and fingerprint | read |
 | | `create_workspace` | Creates a workspace (containers allow only a few); it starts from the latest saved version, which may not be the live one | write |
+| | `update_workspace` | Renames a workspace or changes its description (other fields are kept) | write |
 | | `delete_workspace` | Deletes a workspace and its unversioned changes; the preview counts them | destructive |
 | | `get_workspace_status` | Shows pending changes and merge conflicts | read |
 | | `quick_preview_workspace` | Checks a workspace compiles by building a throwaway preview; saves and publishes nothing | read |
 | | `create_version` | Saves the workspace as a new container version. Does not publish. Refuses when there are no changes or there are merge conflicts | write |
-| | `publish_version` | Makes a version live; the preview shows the version and what is live now | destructive |
+| | `publish_version` | Makes a version live; the preview shows the version (each tag's paused state) and what is live now | destructive |
 | | `get_live_version` | Gets the currently published version | read |
-| | `list_versions` | Lists container versions | read |
+| | `list_versions` | Lists container versions and marks the live one | read |
+| | `get_version` | Summarises a saved version (or returns all of it with `full: true`) | read |
+| | `get_latest_version_header` | Gets the latest version, the base new workspaces start from (may differ from live) | read |
 | `tags` | `list_tags`, `get_tag` | Lists tags / gets one tag in full | read |
 | | `create_tag`, `update_tag` | Creates a tag / changes some fields of a tag (other fields are kept); for GA4, Google Ads and Floodlight tags, also reports the Google tag and configs GTM adds by itself | write |
 | | `delete_tag` | Deletes a tag; the preview shows the tag | destructive |
@@ -105,27 +111,22 @@ Groups marked *optional* are off unless you enable them.
 | | `enable_built_in_variables` | Enables built-in variables (Page URL, Click ID, …) | write |
 | | `disable_built_in_variables` | Disables built-in variables; the preview skips ones that are not enabled | destructive |
 | `folders` | `list_folders` | Lists folders | read |
+| | `get_folder_entities` | Lists the tags, triggers and variables in a folder | read |
 | `guidance` | `get_tag_templates`, `get_trigger_templates` | Example `create_tag` / `create_trigger` arguments for common tag and trigger types (no API call) | read |
-| `folder-admin` (optional) | `create_folder` | Creates a folder | write |
-| | `move_entities_to_folder` | Moves tags, triggers and variables into a folder (folder `0` = out of any folder) | write |
-| | `delete_folder` | Deletes a folder; the preview lists what is in it, which is kept | destructive |
+| `templates` (optional) | `list_templates` | Lists custom templates with the `cvt_…` type their tags or variables use (no template code) | read |
+| | `get_template` | Gets one template with its `.tpl` code (optionally without it) | read |
+| | `create_template`, `update_template` | Creates a template from `.tpl` code / changes its name or code (other fields are kept) | write |
+| | `import_gallery_template` | Imports a Community Template Gallery template by GitHub owner and repository, accepting its declared permissions | write |
+| | `delete_template` | Deletes a template; the preview lists the tags and variables that use it | destructive |
 | `zones` (optional, GTM 360) | `list_zones`, `get_zone` | Lists zones / gets one zone in full | read |
 | | `create_zone`, `update_zone` | Creates a zone / changes some fields of a zone (boundary conditions as a JSON string) | write |
 | | `delete_zone` | Deletes a zone; the preview shows the zone | destructive |
-| `gtag` (optional) | `list_google_tag_configs`, `get_google_tag_config` | Lists the Google tag configs GTM creates with GA4, Ads and Floodlight tags (type and tag ID) / gets one in full | read |
-| | `create_google_tag_config`, `update_google_tag_config` | Creates a Google tag config / changes its type or parameters | write |
-| | `delete_google_tag_config` | Deletes a Google tag config, e.g. one left behind after its tag was deleted | destructive |
 | `server` (optional, server containers) | `list_clients`, `get_client` | Lists clients / gets one client in full | read |
 | | `create_client`, `update_client` | Creates a client / changes some fields of a client (other fields are kept) | write |
 | | `delete_client` | Deletes a client; the preview shows the client | destructive |
 | | `list_transformations`, `get_transformation` | Lists transformations / gets one transformation in full | read |
 | | `create_transformation`, `update_transformation` | Creates a transformation / changes some fields of a transformation (other fields are kept) | write |
 | | `delete_transformation` | Deletes a transformation; the preview shows the transformation | destructive |
-| `templates` (optional) | `list_templates` | Lists custom templates with the `cvt_…` type their tags or variables use (no template code) | read |
-| | `get_template` | Gets one template with its `.tpl` code (optionally without it) | read |
-| | `create_template`, `update_template` | Creates a template from `.tpl` code / changes its name or code (other fields are kept) | write |
-| | `import_gallery_template` | Imports a Community Template Gallery template by GitHub owner and repository, accepting its declared permissions | write |
-| | `delete_template` | Deletes a template; the preview lists the tags and variables that use it | destructive |
 | `environments` (optional) | `list_environments`, `get_environment` | Lists a container's environments / gets one with its authorization code | read |
 | | `create_environment` | Creates a user environment (e.g. staging); applies immediately | admin |
 | | `update_environment` | Changes an environment; repointing it to another version or workspace needs `confirm: true` | destructive |
@@ -133,11 +134,33 @@ Groups marked *optional* are off unless you enable them.
 | | `delete_environment` | Deletes a user environment; pages using its snippet stop loading it | destructive |
 | `destinations` (optional) | `list_destinations`, `get_destination` | Lists the Google tag destinations linked to a container / gets one | read |
 | | `link_destination` | Links a destination to this container, moving it from its current one | destructive |
+| `gtag` (optional) | `list_google_tag_configs`, `get_google_tag_config` | Lists the Google tag configs GTM creates with GA4, Ads and Floodlight tags (type and tag ID) / gets one in full | read |
+| | `create_google_tag_config`, `update_google_tag_config` | Creates a Google tag config / changes its type or parameters | write |
+| | `delete_google_tag_config` | Deletes a Google tag config, e.g. one left behind after its tag was deleted | destructive |
 | `users` (optional) | `list_user_permissions` | Lists who can access an account and its containers | read |
 | | `set_user_permission` | Adds a user or changes their account / container access; the preview shows before and after | destructive |
 | | `delete_user_permission` | Removes a user from an account | destructive |
+| `container-admin` (optional) | `get_container` | Gets a container's settings, tag IDs, features and fingerprint | read |
+| | `create_container` | Creates a container (web, android, ios, amp or server) | admin |
+| | `update_container` | Changes a container's name, domains, notes or server URLs (other fields are kept) | admin |
+| | `combine_containers` | Merges another container of the account into this one; the preview shows both | destructive |
+| | `move_tag_id` | Moves a tag ID out into a new container; confirming also needs `acceptTerms: true` | destructive |
+| `folder-admin` (optional) | `get_folder` | Gets a folder with its fingerprint | read |
+| | `create_folder` | Creates a folder | write |
+| | `update_folder` | Renames a folder or changes its notes (other fields are kept) | write |
+| | `move_entities_to_folder` | Moves tags, triggers and variables into a folder (folder `0` = out of any folder) | write |
+| | `delete_folder` | Deletes a folder; the preview lists what is in it, which is kept, and the result says what was moved out | destructive |
+| `workspace-admin` (optional) | `sync_workspace` | Brings a workspace's unchanged entities up to the latest version; clashes become merge conflicts; needs `confirm: true` | write |
+| | `resolve_workspace_conflict` | Replaces a conflicting tag, trigger, variable or folder with the resolved one; the preview shows both sides | destructive |
+| | `bulk_update_workspace` | Adds, updates and deletes several tags, triggers, variables and folders in one call (new IDs `new_1`, `new_2`, …) | destructive |
+| `version-admin` (optional) | `update_version` | Renames a version or changes its description | write |
+| | `delete_version` | Deletes (archives) a version other than the live one; `undelete_version` restores it | destructive |
+| | `undelete_version` | Restores a deleted version; needs `confirm: true` | write |
+| | `set_latest_version` | Makes a version the latest (the base for new workspaces and syncs); does not publish; needs `confirm: true` | write |
+| `reverts` (optional) | `revert_workspace_entity` | Discards a workspace's changes to one tag, trigger, variable, folder, zone, template, client, transformation or built-in variable; the preview shows what is undone | destructive |
 
-The server also offers best-practices guides as MCP resources (`gtm://best-practices`).
+The server also offers best-practice guides and skills as MCP resources and prompts; see
+[Skills and prompts](#skills-and-prompts).
 
 ### Tool groups
 
@@ -149,10 +172,10 @@ works here.
 
 | Value | Tools listed |
 |---|---|
-| empty (the default) | The default groups below, kept under 40 KB of tool definitions |
+| empty (the default) | The default groups below: 44 tools, about 33 KB of tool definitions (the limit is 40 KB) |
 | `default,users,gtag` | The default groups plus `users` and `gtag` |
 | `tags,triggers,variables` | Only those groups (plus `core`) |
-| `all` | Every group. Bigger, so every conversation starts with more context used |
+| `all` | Every group: 100 tools, about 75 KB, so every conversation starts with more context used |
 
 The value is comma-separated and case-insensitive. `core` (`ping`, `auth_status`) is always on.
 An unknown name makes every `/mcp` request fail with an error that names it, and `/setup` shows
@@ -160,14 +183,13 @@ the same error, so a typo can't silently change what clients see.
 
 - **Default:** `accounts`, `workspaces` (including versions and publishing), `tags`, `triggers`,
   `variables`, `folders` (reading), `builtins`, `guidance`.
-- **Optional:** `folder-admin` (create, fill and delete folders), `gtag` (Google tag configs),
-  `users` (user permissions), `templates`, `zones`, `server`, `environments`, `destinations`,
-  `container-admin`, `workspace-admin`, `version-admin`, `reverts`.
+- **Optional:** `templates` (custom templates), `zones` (GTM 360), `server` (server-side
+  containers), `environments`, `destinations`, `gtag` (Google tag configs), `users` (user
+  permissions), `container-admin`, `folder-admin` (create, edit, fill and delete folders),
+  `workspace-admin` (sync, conflicts, bulk edits), `version-admin`, `reverts`.
 
-`guidance`, `templates`, `zones`, `server`, `environments`, `destinations`, `container-admin`,
-`workspace-admin`, `version-admin` and `reverts` are accepted but have no tools yet. Unlike
-the Go server, `templates`, `zones` (GTM 360) and `server` (server-side containers) are optional
-here, to keep the default list small. `pnpm tools-report` prints the size of each group.
+Unlike the Go server, `templates`, `zones` and `server` are optional here, to keep the default
+list small. `pnpm tools-report` prints the size of each group.
 
 ## Publishing and deleting
 
@@ -182,11 +204,15 @@ These tools change your live site or remove work for good, so each one takes two
 - **`delete_container`** deletes a container, its workspaces and its versions. Besides
   `confirm: true` it needs the container's public ID (`GTM-XXXXXXX`) typed back, so a wrong
   numeric ID can't delete the wrong container.
+- **`combine_containers`** and **`move_tag_id`** change which container a tag ID loads, at once.
+  Their previews show the containers involved; `move_tag_id` also needs `acceptTerms: true` for
+  the terms of service copied to the new container, and never copies users.
 
-They need the `tagmanager.publish` and `tagmanager.delete.containers` scopes. If you'd rather not
-allow them, leave those scopes out of `GOOGLE_SCOPES` and the consent screen: the tools then fail
-with a permission error, and `/setup` lists which tools are affected. There is no tool to delete
-an account (the API has no such method).
+`publish_version`, `delete_workspace` and `delete_container` need the `tagmanager.publish` and
+`tagmanager.delete.containers` scopes. If you'd rather not allow them, leave those scopes out of
+`GOOGLE_SCOPES` and the consent screen: the tools then fail with a permission error, and `/setup`
+lists which tools are affected. There is no tool to delete an account (the API has no such
+method).
 
 ## Skills and prompts
 
@@ -208,7 +234,7 @@ against the `tools/list` budget.
 | `generate-tracking-plan` | Writes a Markdown tracking plan for a workspace | `accountId`, `containerId`, `workspaceId` (optional) |
 | `plan-safe-edit` | Turns a change request into a step-by-step plan to approve | `change`; `accountId`, `containerId` (optional) |
 | `suggest-ga4-setup` | Designs GA4 tags, triggers, variables and data layer pushes | `goals` |
-| `find-gallery-template` | Finds a Community Template Gallery template and explains how to add it | `templateName` |
+| `find-gallery-template` | Finds a Community Template Gallery template, checks it and imports it (`import_gallery_template`, optional `templates` group) | `templateName` |
 
 A prompt is the skill's text plus the arguments you give it and the best-practice topics the
 skill relies on. When a prompt that takes IDs gets them, it also reads the workspace (tags,
@@ -261,7 +287,11 @@ Editing only the Markdown body of an existing file needs no regeneration.
 - **Per-client consent.** Each MCP client must be approved on a consent page before the Google
   sign-in. The approval is remembered in that browser for 30 days.
 - **`confirm: true`** is required by every *destructive* tool: the `delete_*` tools,
-  `disable_built_in_variables`, `set_user_permission`, `update_account` and `publish_version`. Without it they only
+  `disable_built_in_variables`, `set_user_permission`, `update_account`, `publish_version`,
+  `reauthorize_environment`, `link_destination`, `update_environment` (when it repoints),
+  `revert_workspace_entity`, `resolve_workspace_conflict`, `bulk_update_workspace`,
+  `combine_containers` and `move_tag_id` (which also needs `acceptTerms: true`), and by the
+  hard-to-undo `sync_workspace`, `undelete_version` and `set_latest_version`. Without it they only
   describe what would happen. `delete_container` also needs the container's public ID, and the
   user-access tools warn when the change is to your own access.
 - **No lost edits.** GTM updates replace the whole object. Update tools read the current entity,
@@ -391,16 +421,16 @@ The Worker asks Google for `openid email profile` (to identify you) plus the sco
 | Scope (`https://www.googleapis.com/auth/…`) | Needed for |
 |---|---|
 | `tagmanager.readonly` | Every read tool |
-| `tagmanager.edit.containers` | Creating workspaces; creating, updating and deleting tags, triggers, variables, folders, built-in variables, Google tag configs, clients, transformations and custom templates |
-| `tagmanager.edit.containerversions` | `create_version` |
-| `tagmanager.publish` | `publish_version` |
+| `tagmanager.edit.containers` | Every other write: workspaces and everything in them (tags, triggers, variables, folders, built-in variables, Google tag configs, zones, clients, transformations, custom templates; syncs, conflicts, bulk edits, reverts), containers (create, update, combine, move tag ID), environments (except reauthorizing), destinations, and `set_latest_version` |
+| `tagmanager.edit.containerversions` | `create_version`, `quick_preview_workspace`, `update_version`, `delete_version`, `undelete_version` |
+| `tagmanager.publish` | `publish_version`, `reauthorize_environment` |
 | `tagmanager.delete.containers` | `delete_workspace`, `delete_container` |
 | `tagmanager.manage.accounts` | `get_account`, `update_account` |
 | `tagmanager.manage.users` | `list_user_permissions`, `set_user_permission`, `delete_user_permission` |
 
 - `tagmanager.publish` and `tagmanager.delete.containers` are optional. Without them the server
-  works the same, except that `publish_version`, `delete_workspace` and `delete_container` fail
-  with a permission error. `/setup` lists any that are missing.
+  works the same, except that `publish_version`, `reauthorize_environment`, `delete_workspace`
+  and `delete_container` fail with a permission error. `/setup` lists any that are missing.
 - After changing `GOOGLE_SCOPES`, redeploy and reconnect each client so Google asks for the new
   set of permissions.
 - `tagmanager.manage.accounts` and `tagmanager.manage.users` are optional too: without them only

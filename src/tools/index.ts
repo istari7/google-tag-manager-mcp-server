@@ -3,19 +3,22 @@
 //
 //   { group: "zones", register: zoneTools },
 //
-// A file whose tools belong to two groups exports one ToolGroup per group (folders.ts).
+// A file whose tools belong to two groups exports one ToolGroup per group (version-admin.ts).
 // `core` modules are always on and can't be switched off. See the "Adding tools" comment in
 // src/mcp/server.ts.
 
 import type { ToolGroup } from "../mcp/registry";
 import { accountTools } from "./accounts";
 import { builtInTools } from "./builtins";
+import { containerAdminTools } from "./container-admin";
 import { destinationTools } from "./destinations";
 import { environmentTools } from "./environments";
-import { folderAdminTools, folderTools } from "./folders";
+import { folderAdminTools } from "./folder-admin";
+import { folderTools } from "./folders";
 import type { ToolGroupName, ToolGroupSelection } from "./groups";
 import { gtagConfigTools } from "./gtag-configs";
 import { guidanceTools } from "./guidance";
+import { revertTools } from "./reverts";
 import { serverTools } from "./server-side";
 import { tagTools } from "./tags";
 import { templateTools } from "./templates";
@@ -23,7 +26,9 @@ import { triggerTools } from "./triggers";
 import { userTools } from "./users";
 import { utilityTools } from "./utility";
 import { variableTools } from "./variables";
+import { versionAdminTools, versionReadTools } from "./version-admin";
 import { versionTools } from "./versions";
+import { workspaceAdminTools } from "./workspace-admin";
 import { workspaceTools } from "./workspaces";
 import { zoneTools } from "./zones";
 
@@ -49,6 +54,11 @@ export const TOOL_MODULES: readonly ToolModule[] = [
 	{ group: "templates", register: templateTools },
 	{ group: "guidance", register: guidanceTools },
 	{ group: "workspaces", register: versionTools },
+	{ group: "workspaces", register: versionReadTools },
+	{ group: "workspace-admin", register: workspaceAdminTools },
+	{ group: "version-admin", register: versionAdminTools },
+	{ group: "reverts", register: revertTools },
+	{ group: "container-admin", register: containerAdminTools },
 	{ group: "environments", register: environmentTools },
 	{ group: "destinations", register: destinationTools },
 ];

@@ -196,6 +196,45 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "containerId",
       "workspaceId",
     ],
+    "description": "Get a workspace's name and description, plus its fingerprint for update_workspace.",
+    "name": "get_workspace",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "name",
+      "description",
+      "fingerprint",
+    ],
+    "description": "Rename a workspace or change its description. Omitted fields are kept.",
+    "name": "update_workspace",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+    ],
     "description": "List a workspace's pending changes and merge conflicts. Nothing is live until create_version, then publish_version.",
     "name": "get_workspace_status",
     "required": [
@@ -704,6 +743,44 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
   },
   {
     "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "folderId",
+    ],
+    "description": "List the tags, triggers and variables in a folder (ID, name, type).",
+    "name": "get_folder_entities",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "folderId",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "folderId",
+    ],
+    "description": "Get a folder's name and notes, plus its fingerprint for update_folder.",
+    "name": "get_folder",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "folderId",
+    ],
+  },
+  {
+    "annotations": {
       "destructiveHint": false,
       "idempotentHint": false,
       "readOnlyHint": false,
@@ -722,6 +799,30 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "containerId",
       "workspaceId",
       "name",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "folderId",
+      "name",
+      "notes",
+      "fingerprint",
+    ],
+    "description": "Rename a folder or change its notes. Omitted fields are kept.",
+    "name": "update_folder",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "folderId",
     ],
   },
   {
@@ -1420,11 +1521,324 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "containerId",
       "includeDeleted",
     ],
-    "description": "List a container's saved versions, newest first, with tag/trigger/variable counts.",
+    "description": "List a container's saved versions, newest first, with tag/trigger/variable counts. The published one has live: true.",
     "name": "list_versions",
     "required": [
       "accountId",
       "containerId",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "containerVersionId",
+      "full",
+    ],
+    "description": "Summarise a saved version: counts and each tag, trigger and variable (name, type). full: true returns all of it.",
+    "name": "get_version",
+    "required": [
+      "accountId",
+      "containerId",
+      "containerVersionId",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+    ],
+    "description": "Get the latest version's header: the base new workspaces start from. May differ from the live version.",
+    "name": "get_latest_version_header",
+    "required": [
+      "accountId",
+      "containerId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "confirm",
+    ],
+    "description": "Bring a workspace's unchanged entities up to the latest version; clashing edits become merge conflicts. Without confirm: true, only previews.",
+    "name": "sync_workspace",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "tag",
+      "trigger",
+      "variable",
+      "folder",
+      "changeStatus",
+      "fingerprint",
+      "confirm",
+    ],
+    "description": "Resolve a merge conflict: the whole tag, trigger, variable or folder you send replaces the workspace's. Without confirm: true, only previews.",
+    "name": "resolve_workspace_conflict",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "changes",
+      "confirm",
+    ],
+    "description": "Add, update or delete several tags, triggers, variables and folders at once. New ones use IDs "new_1", "new_2"… Without confirm: true, only previews.",
+    "name": "bulk_update_workspace",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "changes",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "containerVersionId",
+      "name",
+      "description",
+      "fingerprint",
+    ],
+    "description": "Rename a saved version or change its description (notes).",
+    "name": "update_version",
+    "required": [
+      "accountId",
+      "containerId",
+      "containerVersionId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "containerVersionId",
+      "confirm",
+    ],
+    "description": "Delete (archive) a saved version, not the live one; undelete_version restores it. Without confirm: true, only previews.",
+    "name": "delete_version",
+    "required": [
+      "accountId",
+      "containerId",
+      "containerVersionId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "containerVersionId",
+      "confirm",
+    ],
+    "description": "Restore a deleted container version. Without confirm: true, only previews.",
+    "name": "undelete_version",
+    "required": [
+      "accountId",
+      "containerId",
+      "containerVersionId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "containerVersionId",
+      "confirm",
+    ],
+    "description": "Make a saved version the latest: new workspaces and syncs start from it. Does not publish. Without confirm: true, only previews.",
+    "name": "set_latest_version",
+    "required": [
+      "accountId",
+      "containerId",
+      "containerVersionId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "kind",
+      "id",
+      "fingerprint",
+      "confirm",
+    ],
+    "description": "Discard a workspace's changes to one entity (an added one is removed). Without confirm: true, only previews.",
+    "name": "revert_workspace_entity",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "kind",
+      "id",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+    ],
+    "description": "Get a container's settings (name, public ID, type, domains, tag IDs, features) and its fingerprint for update_container.",
+    "name": "get_container",
+    "required": [
+      "accountId",
+      "containerId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "name",
+      "usageContext",
+      "domainName",
+      "notes",
+      "taggingServerUrls",
+    ],
+    "description": "Create a container in a GTM account. usageContext sets its type.",
+    "name": "create_container",
+    "required": [
+      "accountId",
+      "name",
+      "usageContext",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "name",
+      "domainName",
+      "notes",
+      "taggingServerUrls",
+      "fingerprint",
+    ],
+    "description": "Change a container's name, domains, notes or server URLs. Omitted fields are kept; [] or "" clears. Takes effect at once (not versioned).",
+    "name": "update_container",
+    "required": [
+      "accountId",
+      "containerId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "sourceContainerId",
+      "settingSource",
+      "confirm",
+    ],
+    "description": "Merge another container of this account into this one; its tag IDs move here. Hard to undo. Without confirm: true, only previews.",
+    "name": "combine_containers",
+    "required": [
+      "accountId",
+      "containerId",
+      "sourceContainerId",
+      "settingSource",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "tagId",
+      "tagName",
+      "copySettings",
+      "acceptTerms",
+      "confirm",
+    ],
+    "description": "Move a tag ID out of this container into a new one. Without confirm: true, only previews; confirming also needs acceptTerms: true.",
+    "name": "move_tag_id",
+    "required": [
+      "accountId",
+      "containerId",
+      "tagId",
+      "tagName",
     ],
   },
   {

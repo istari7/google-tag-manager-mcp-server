@@ -16,7 +16,13 @@ exports[`tools per configuration > puts every tool in exactly one group (or core
     "enable_built_in_variables",
     "disable_built_in_variables",
   ],
-  "container-admin": [],
+  "container-admin": [
+    "get_container",
+    "create_container",
+    "update_container",
+    "combine_containers",
+    "move_tag_id",
+  ],
   "destinations": [
     "list_destinations",
     "get_destination",
@@ -31,12 +37,15 @@ exports[`tools per configuration > puts every tool in exactly one group (or core
     "delete_environment",
   ],
   "folder-admin": [
+    "get_folder",
     "create_folder",
+    "update_folder",
     "move_entities_to_folder",
     "delete_folder",
   ],
   "folders": [
     "list_folders",
+    "get_folder_entities",
   ],
   "gtag": [
     "list_google_tag_configs",
@@ -49,7 +58,9 @@ exports[`tools per configuration > puts every tool in exactly one group (or core
     "get_tag_templates",
     "get_trigger_templates",
   ],
-  "reverts": [],
+  "reverts": [
+    "revert_workspace_entity",
+  ],
   "server": [
     "list_clients",
     "get_client",
@@ -96,10 +107,21 @@ exports[`tools per configuration > puts every tool in exactly one group (or core
     "update_variable",
     "delete_variable",
   ],
-  "version-admin": [],
-  "workspace-admin": [],
+  "version-admin": [
+    "update_version",
+    "delete_version",
+    "undelete_version",
+    "set_latest_version",
+  ],
+  "workspace-admin": [
+    "sync_workspace",
+    "resolve_workspace_conflict",
+    "bulk_update_workspace",
+  ],
   "workspaces": [
     "list_workspaces",
+    "get_workspace",
+    "update_workspace",
     "get_workspace_status",
     "create_workspace",
     "quick_preview_workspace",
@@ -108,6 +130,8 @@ exports[`tools per configuration > puts every tool in exactly one group (or core
     "publish_version",
     "get_live_version",
     "list_versions",
+    "get_version",
+    "get_latest_version_header",
   ],
   "zones": [
     "list_zones",
