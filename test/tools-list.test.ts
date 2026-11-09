@@ -105,6 +105,7 @@ describe("tools/list", () => {
 			"delete_workspace",
 			"delete_zone",
 			"disable_built_in_variables",
+			"import_gallery_template",
 			"link_destination",
 			"move_tag_id",
 			"publish_version",

@@ -30,6 +30,16 @@ describe("list_destinations / get_destination", () => {
 		});
 	});
 
+	it("list_destinations says truncated when Google returns a nextPageToken (the API takes no pageToken)", async () => {
+		mockGtm({ [`${CONTAINER}/destinations`]: () => json({ destination: [ga4], nextPageToken: "abc" }) });
+		const result = await callTool("list_destinations", CONTAINER_ARGS);
+		expect(result.json()).toEqual({
+			destinations: [{ destinationLinkId: "3", destinationId: "G-ABC123", name: "Main site" }],
+			truncated: true,
+			note: "Only the first page was read; there are more destinations than shown.",
+		});
+	});
+
 	it("get_destination GETs {container}/destinations/{linkId}", async () => {
 		const mock = mockGtm({ [`${CONTAINER}/destinations/3`]: () => json(ga4) });
 		const result = await callTool("get_destination", { ...CONTAINER_ARGS, destinationLinkId: "3" });

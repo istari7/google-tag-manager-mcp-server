@@ -78,6 +78,21 @@ describe("parseToolGroups", () => {
 		expect(() => parseToolGroups("core")).toThrow(ToolGroupsError);
 	});
 
+	it("echoes at most 20 characters of a name-shaped value", () => {
+		const message = (value: string) => {
+			try {
+				parseToolGroups(value);
+			} catch (e) {
+				return e instanceof ToolGroupsError ? e.message : "";
+			}
+			return "";
+		};
+		expect(message("a234567890b234567890")).toContain('"a234567890b234567890"');
+		const long = "a234567890b234567890c";
+		expect(message(long)).not.toContain(long);
+		expect(message(long)).toContain("(not shown: not a group name)");
+	});
+
 	it("does not echo a value that isn't name-shaped (it could be a pasted secret)", () => {
 		const secret = "ya29.a0AfH6SMBsecretLookingValue";
 		const error = (() => {
@@ -186,7 +201,9 @@ describe("an invalid GTM_TOOL_GROUPS", () => {
 			authHandler.fetch(new Request(`${ORIGIN}/setup`), { ...env, GTM_TOOL_GROUPS: value }, createExecutionContext());
 		const bad = await (await setup("tags,tgas")).text();
 		expect(bad).toContain("❌ Not ready.");
-		expect(bad).toContain("❌ <code>GTM_TOOL_GROUPS</code>: GTM_TOOL_GROUPS has an unknown tool group &#34;tgas&#34;");
+		// /setup is public: it says the value is wrong without echoing any of it.
+		expect(bad).toContain("❌ <code>GTM_TOOL_GROUPS</code>: GTM_TOOL_GROUPS has an unknown tool group. Use");
+		expect(bad).not.toContain("tgas");
 
 		const good = await (await setup("")).text();
 		expect(good).toContain("✅ Ready.");

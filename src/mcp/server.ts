@@ -25,7 +25,9 @@
 //    (src/tools/write.ts). Deletes, and anything that takes effect at once (publishing,
 //    account settings, user access), take `confirm: true` and return a preview without it:
 //    use confirmGate / okPreview / deleteWithConfirm from src/tools/confirm.ts.
-//    delete_container also wants the container's public ID typed back.
+//    delete_container also wants the container's public ID typed by the user: through MCP
+//    elicitation when the client declares it (the third `call` argument, ToolCall in
+//    registry.ts), else typed back as an argument.
 // 7. Tests: test/tools/<group>.test.ts with the helpers in test/tools/helpers.ts (assert the
 //    outgoing request). Then `pnpm test -u` for the tools/list snapshot, and keep the default
 //    groups' tools/list < 40 KB (`pnpm tools-report` shows the bytes per group).
@@ -70,7 +72,8 @@ export async function handleMcp(request: Request, env: Env, ctx: ExecutionContex
 	} catch (error) {
 		if (!(error instanceof ToolGroupsError)) throw error;
 		// A deploy-time mistake: fail every /mcp request loudly rather than serve a surprise
-		// tool set. /setup shows the same message, which echoes only name-shaped input.
+		// tool set. The message echoes only short, name-shaped input; the public /setup page
+		// shows a version that echoes nothing.
 		console.error("mcp: invalid GTM_TOOL_GROUPS");
 		return Response.json(
 			{ jsonrpc: "2.0", id: null, error: { code: -32603, message: error.message } },

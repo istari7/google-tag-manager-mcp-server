@@ -34,13 +34,16 @@ template in the GTM UI instead (see the end of this skill).
 
 ## Add it
 
-1. Tell the user which template you will import (owner and repository) and
-   what its permissions allow, and get their go-ahead: importing accepts the
-   template's declared permissions on their behalf.
-2. `import_gallery_template` with the workspace IDs, `galleryOwner` and
+1. Call `import_gallery_template` with the workspace IDs, `galleryOwner` and
    `galleryRepository` (the GitHub owner and repository), and optionally
-   `gallerySha` to pin a commit. The result includes the template's `type`
-   (`cvt_…`), which tags or variables built from it use.
+   `gallerySha` to pin a commit, without `confirm`: it only previews. The
+   API can't read a template before importing it, so the preview can't list
+   its permissions; read them in the repository's `template.tpl`.
+2. Tell the user which template you will import (owner and repository) and
+   what its permissions allow, and get their go-ahead: importing accepts the
+   template's declared permissions on their behalf. Then call it again with
+   `confirm: true`. The result includes the template's `type` (`cvt_…`),
+   which tags or variables built from it use.
 3. Create the tag (or variable) with `create_tag` / `create_variable` using
    that type, following the template's documentation for its parameters. If
    another tag already uses the template, read it with `get_tag` and copy its

@@ -28,10 +28,13 @@ const destinationIdInput = (what: string) =>
 		.refine(isDestinationId, { message: `${what} must contain only letters, digits, "_" and "-"` })
 		.describe(what);
 
-/** destinations.list takes no pageToken, so it is one call. */
+/**
+ * destinations.list takes no pageToken, so it is one call. Its response may still carry a
+ * nextPageToken: then there are more destinations than this page, and `truncated` says so.
+ */
 async function listDestinations(gtm: GtmRequester, parent: string) {
 	const page = await destinations.list(gtm, { parent });
-	return page.destination ?? [];
+	return { items: page.destination ?? [], truncated: !!page.nextPageToken };
 }
 
 export const destinationTools: ToolGroup = (tools) => {
@@ -43,8 +46,8 @@ export const destinationTools: ToolGroup = (tools) => {
 			annotations: { readOnlyHint: true },
 		},
 		async (ids, { gtm }) => {
-			const items = await listDestinations(gtm, containerPath(ids));
-			return okList("destinations", { items, pages: 1, truncated: false }, destinationRow);
+			const { items, truncated } = await listDestinations(gtm, containerPath(ids));
+			return okList("destinations", { items, pages: 1, truncated }, destinationRow);
 		},
 	);
 
@@ -75,7 +78,7 @@ export const destinationTools: ToolGroup = (tools) => {
 				confirm,
 				preview: async () => {
 					const container = await accounts.containers.get(gtm, { path: parent });
-					const linked = (await listDestinations(gtm, parent)).find((d) => d.destinationId === destinationId);
+					const linked = (await listDestinations(gtm, parent)).items.find((d) => d.destinationId === destinationId);
 					if (linked) return ok({ alreadyLinked: compact(destinationRow(linked)) });
 					return okPreview(
 						{

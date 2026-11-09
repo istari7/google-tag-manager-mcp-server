@@ -45,10 +45,23 @@ const KEYWORDS = ["all", "default"] as const;
 
 export type ToolGroupSelection = ReadonlySet<ToolGroupName>;
 
-/** A bad GTM_TOOL_GROUPS value. The message is safe to show: it echoes only name-shaped input. */
+/**
+ * A bad GTM_TOOL_GROUPS value. `message` (for signed-in MCP clients) echoes the bad name only
+ * when it is short and name-shaped; `publicMessage` (for the public /setup page) never does.
+ */
 export class ToolGroupsError extends Error {
 	override readonly name = "ToolGroupsError";
+	// A plain field, not a parameter property: scripts/tools-report.ts runs this file on Node's
+	// type stripping, which only takes erasable TypeScript.
+	readonly publicMessage: string;
+	constructor(message: string, publicMessage: string) {
+		super(message);
+		this.publicMessage = publicMessage;
+	}
 }
+
+/** An unknown name echoed back: name-shaped and at most 20 characters (group names have at most 15). */
+const ECHOABLE = /^[a-z0-9_-]{1,20}$/;
 
 const isGroupName = (name: string): name is ToolGroupName => (TOOL_GROUP_NAMES as readonly string[]).includes(name);
 
@@ -72,9 +85,11 @@ export function parseToolGroups(value: string | undefined): ToolGroupSelection {
 		else {
 			// Echo the name only when it looks like one: the variable should never hold a secret,
 			// but if someone pastes one there it must not end up in a response or a log.
-			const shown = /^[a-z0-9_-]{1,32}$/.test(name) ? `"${name}"` : "(not shown: not a group name)";
+			const shown = ECHOABLE.test(name) ? `"${name}"` : "(not shown: not a group name)";
+			const use = `Use a comma-separated list of: ${[...KEYWORDS, ...TOOL_GROUP_NAMES].join(", ")}.`;
 			throw new ToolGroupsError(
-				`GTM_TOOL_GROUPS has an unknown tool group ${shown}. Use a comma-separated list of: ${[...KEYWORDS, ...TOOL_GROUP_NAMES].join(", ")}.`,
+				`GTM_TOOL_GROUPS has an unknown tool group ${shown}. ${use}`,
+				`GTM_TOOL_GROUPS has an unknown tool group. ${use}`,
 			);
 		}
 	}

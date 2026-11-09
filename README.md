@@ -61,9 +61,9 @@ MCP client ──OAuth──▶ your Worker (/authorize, /token, /mcp) ──▶
 
 **Kind:** *read* changes nothing. *write* changes a workspace or creates a version, but nothing
 on your website changes until a version is published. *admin* changes account or container
-settings, which apply immediately. *destructive* deletes something, changes who has access, or
-changes what your sites load, and needs `confirm: true` (without it, the tool returns a preview
-of what it would do). Workspace edits reach your site only when a version is published, but some
+settings, which apply immediately. *destructive* deletes something, changes who has access,
+changes what your sites load, or accepts a third-party template's permissions, and needs
+`confirm: true` (without it, the tool returns a preview of what it would do). Workspace edits reach your site only when a version is published, but some
 tools act the moment they are confirmed: `publish_version`, `delete_container`,
 `combine_containers` and `move_tag_id` change what your sites load; `update_account`,
 `update_container`, `set_user_permission` and `delete_user_permission` change account or
@@ -84,14 +84,14 @@ that this table lists every tool, in its group.
 | | `list_containers` | Lists the containers in an account | read |
 | | `lookup_container` | Finds a container by its public ID (`GTM-XXXXXXX`); an error if there is none | read |
 | | `get_container_snippet` | Returns the container's install code: the `<head>` script and the `<noscript>` body part | read |
-| | `delete_container` | Deletes a container for good; needs `confirm: true` and its public ID typed back by you (the preview masks it) | destructive |
+| | `delete_container` | Deletes a container for good; needs `confirm: true` and its public ID typed by you: in a form your client shows (MCP elicitation), or in chat when the client can't | destructive |
 | `workspaces` | `list_workspaces` | Lists a container's workspaces | read |
 | | `get_workspace` | Gets a workspace's name, description and fingerprint | read |
 | | `create_workspace` | Creates a workspace (containers allow only a few); it starts from the latest saved version, which may not be the live one | write |
 | | `update_workspace` | Renames a workspace or changes its description (other fields are kept) | write |
 | | `delete_workspace` | Deletes a workspace and its unversioned changes; the preview counts them | destructive |
 | | `get_workspace_status` | Shows pending changes and merge conflicts | read |
-| | `quick_preview_workspace` | Checks a workspace compiles by building a throwaway preview; saves and publishes nothing | read |
+| | `quick_preview_workspace` | Checks a workspace compiles by building a throwaway preview (a POST, so not marked read-only); saves and publishes nothing | write |
 | | `create_version` | Saves the workspace as a new container version. Does not publish. Refuses when there are no changes or there are merge conflicts | write |
 | | `publish_version` | Makes a version live; the preview shows the version (each tag's paused state) and what is live now | destructive |
 | | `get_live_version` | Gets the currently published version | read |
@@ -116,7 +116,7 @@ that this table lists every tool, in its group.
 | `templates` (optional) | `list_templates` | Lists custom templates with the `cvt_…` type their tags or variables use (no template code) | read |
 | | `get_template` | Gets one template with its `.tpl` code (optionally without it) | read |
 | | `create_template`, `update_template` | Creates a template from `.tpl` code / changes its name or code (other fields are kept) | write |
-| | `import_gallery_template` | Imports a Community Template Gallery template by GitHub owner and repository, accepting its declared permissions | write |
+| | `import_gallery_template` | Imports a Community Template Gallery template by GitHub owner and repository, accepting its declared permissions; the preview names the template (the API can't show its permissions before import) | destructive |
 | | `delete_template` | Deletes a template; the preview lists the tags and variables that use it | destructive |
 | `zones` (optional, GTM 360) | `list_zones`, `get_zone` | Lists zones / gets one zone in full | read |
 | | `create_zone`, `update_zone` | Creates a zone / changes some fields of a zone (boundary conditions as a JSON string) | write |
@@ -202,8 +202,16 @@ These tools change your live site or remove work for good, so each one takes two
 - **`delete_workspace`** discards a workspace and its unversioned changes. Saved versions and the
   live container are not affected.
 - **`delete_container`** deletes a container, its workspaces and its versions. Besides
-  `confirm: true` it needs the container's public ID (`GTM-XXXXXXX`) typed back, so a wrong
-  numeric ID can't delete the wrong container.
+  `confirm: true` it needs the container's public ID (`GTM-XXXXXXX`) typed by you, so a wrong
+  numeric ID can't delete the wrong container. If your client supports MCP elicitation (protocol
+  2026-07-28 clients that declare it), the confirmed call makes the client ask you for the ID in a
+  form the AI never fills in. Otherwise the AI must pass the ID you typed in chat; since
+  `list_containers` and friends show public IDs, that check relies on the AI following the
+  instructions, so read what you are asked to confirm.
+- **`import_gallery_template`** accepts every permission a Community Template Gallery template
+  declares (scripts it may load, data it may send, cookies). It previews first and imports only
+  with `confirm: true`; the API can't read a template before importing it, so check its
+  permissions in its GitHub repository.
 - **`combine_containers`** and **`move_tag_id`** change which container a tag ID loads, at once.
   Their previews show the containers involved; `move_tag_id` also needs `acceptTerms: true` for
   the terms of service copied to the new container, and never copies users.
@@ -290,10 +298,12 @@ Editing only the Markdown body of an existing file needs no regeneration.
   `disable_built_in_variables`, `set_user_permission`, `update_account`, `publish_version`,
   `reauthorize_environment`, `link_destination`, `update_environment` (when it repoints),
   `revert_workspace_entity`, `resolve_workspace_conflict`, `bulk_update_workspace`,
-  `combine_containers` and `move_tag_id` (which also needs `acceptTerms: true`), and by the
+  `import_gallery_template`, `combine_containers` and `move_tag_id` (which also needs
+  `acceptTerms: true`), and by the
   hard-to-undo `sync_workspace`, `undelete_version` and `set_latest_version`. Without it they only
-  describe what would happen. `delete_container` also needs the container's public ID, and the
-  user-access tools warn when the change is to your own access.
+  describe what would happen. `delete_container` also needs the container's public ID, typed by
+  the user (asked through the client when it supports elicitation), and the user-access tools warn
+  when the change is to your own access.
 - **No lost edits.** GTM updates replace the whole object. Update tools read the current entity,
   merge only the fields you change, and write it back with Google's fingerprint. They also take
   the `fingerprint` the AI saw in its earlier `get_*` call: if someone changed the entity since
@@ -457,7 +467,7 @@ The Worker asks Google for `openid email profile` (to identify you) plus the sco
   create). Previews are reads: 1 call for a delete (`delete_trigger` also reads the tag and
   trigger lists, `delete_variable` the tag, trigger and variable lists, `delete_workspace` the
   workspace status), 2 for `publish_version` (the version and the live one). Creating a GA4,
-  Google Ads or Floodlight tag costs 2 more calls (the workspace status before and after). A confirmed `delete_container` costs 2 (it re-reads the public ID). The server retries rate-limit errors with backoff.
+  Google Ads or Floodlight tag costs 2 more calls (the workspace status before and after). A confirmed `delete_container` costs 2 (it re-reads the public ID; 3 with elicitation, which reads it again when the client retries). Calls that read several lists at once (the reference checks of `delete_trigger`, `delete_variable` and `delete_template`, and a skill prompt's live data) read at most 24 pages in all, to stay under the Workers subrequest limit; on a bigger workspace they say the check or the data is partial. The server retries rate-limit errors with backoff.
 
 ## The 7-day sign-in problem
 

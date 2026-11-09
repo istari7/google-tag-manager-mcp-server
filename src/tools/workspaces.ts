@@ -129,7 +129,8 @@ export const workspaceTools: ToolGroup = (tools) => {
 			description:
 				"Check that a workspace compiles by building a throwaway preview version. Saves and publishes nothing.",
 			input: workspaceInput,
-			annotations: { readOnlyHint: true },
+			// A POST that builds a preview on Google's side: not a read, though nothing is saved.
+			annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 		},
 		async (ids, { gtm }) => {
 			const response = await workspaces.quickPreview(gtm, { path: workspacePath(ids) });

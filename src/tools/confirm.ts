@@ -5,23 +5,29 @@
 // never runs when not. Give the input a `confirm: confirmInput("…")` field (./inputs.ts).
 
 import type { CallToolResult } from "@modelcontextprotocol/server";
+import type { ToolResult } from "../mcp/registry";
 import { compact, ok } from "../mcp/result";
 import { okWrite } from "./write";
 
-type Result = CallToolResult | Promise<CallToolResult>;
+type Result<R> = R | Promise<R>;
 
-export interface ConfirmGateOptions {
+export interface ConfirmGateOptions<R extends ToolResult = CallToolResult> {
 	confirm: boolean | undefined;
 	/**
 	 * Without `confirm: true`: read-only work that describes the change. Usually returns
 	 * okPreview(...); may return fail(...) when the change can't be made at all.
 	 */
-	preview: () => Result;
-	/** With `confirm: true`: make the change and return the result. */
-	apply: () => Result;
+	preview: () => Result<CallToolResult>;
+	/**
+	 * With `confirm: true`: make the change and return the result. Only delete_container may
+	 * return inputRequired(...) here, to have the client ask the user first.
+	 */
+	apply: () => Result<R>;
 }
 
-export async function confirmGate(options: ConfirmGateOptions): Promise<CallToolResult> {
+export async function confirmGate<R extends ToolResult = CallToolResult>(
+	options: ConfirmGateOptions<R>,
+): Promise<CallToolResult | R> {
 	return options.confirm === true ? options.apply() : options.preview();
 }
 

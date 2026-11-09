@@ -43,7 +43,7 @@ export function llmsTxt(origin: string): string {
 		"- Every edit happens in a workspace. Workspace edits and saved versions are not live.",
 		"- publish_version, the delete tools and other irreversible tools return a preview and act",
 		"  only when called again with confirm: true. delete_container also needs the container's",
-		"  public ID typed back.",
+		"  public ID typed by the user.",
 		"",
 		`## Skills (MCP resources ${SKILLS_URI}/{name}, and prompts of the same name)`,
 		"",

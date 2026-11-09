@@ -131,6 +131,35 @@ describe("update_environment", () => {
 		expect(calls[1]?.body).toEqual({ ...storedBody, containerVersionId: "41" });
 	});
 
+	it("repointing to a workspace drops the stored version from the PUT body", async () => {
+		const mock = mockGtm(routes());
+		await callTool("update_environment", { ...ENV_ARGS, workspaceId: "7", confirm: true });
+		const body = describeCall(mock.gtm()[1]).body as Environment;
+		const { containerVersionId: _old, ...rest } = storedBody;
+		expect(body).toEqual({ ...rest, workspaceId: "7" });
+		expect(body).not.toHaveProperty("containerVersionId");
+	});
+
+	it("repointing to a version drops the stored workspace from the PUT body", async () => {
+		const mock = mockGtm(routes({ ...staging, containerVersionId: undefined, workspaceId: "7" }));
+		await callTool("update_environment", { ...ENV_ARGS, containerVersionId: "41", confirm: true });
+		const body = describeCall(mock.gtm()[1]).body as Environment;
+		expect(body).toMatchObject({ containerVersionId: "41" });
+		expect(body).not.toHaveProperty("workspaceId");
+	});
+
+	it("refuses a version and a workspace at once, with no call", async () => {
+		const mock = mockGtm(routes());
+		const result = await callTool("update_environment", {
+			...ENV_ARGS,
+			containerVersionId: "41",
+			workspaceId: "7",
+			confirm: true,
+		});
+		expect(result).toMatchObject({ isError: true, text: expect.stringContaining("pass one of them") });
+		expect(mock.gtm()).toHaveLength(0);
+	});
+
 	it("refuses name or version changes on a non-user environment, with no PUT", async () => {
 		const mock = mockGtm(routes(live));
 		const result = await callTool("update_environment", {

@@ -265,7 +265,9 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
   },
   {
     "annotations": {
-      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "readOnlyHint": false,
     },
     "args": [
       "accountId",
@@ -1415,7 +1417,7 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
   },
   {
     "annotations": {
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "readOnlyHint": false,
     },
@@ -1426,8 +1428,9 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "galleryOwner",
       "galleryRepository",
       "gallerySha",
+      "confirm",
     ],
-    "description": "Import a Community Template Gallery template from GitHub, accepting its declared permissions. Returns the type for create_tag.",
+    "description": "Import a Community Template Gallery template from GitHub, accepting its declared permissions. Without confirm: true, only previews.",
     "name": "import_gallery_template",
     "required": [
       "accountId",

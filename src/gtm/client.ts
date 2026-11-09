@@ -71,6 +71,20 @@ export const MAX_RETRIES = 3;
 export const BACKOFF_MS: readonly number[] = [1000, 2000, 4000];
 export const DEFAULT_MAX_PAGES = 20;
 
+/**
+ * List pages one tool call (or prompt) may read when it lists several things at once: a
+ * skill's live data, or the reference checks of delete_trigger / delete_variable /
+ * delete_template. Each page is a subrequest, and a Worker gets 50 per request on the Free
+ * plan; this leaves room for the reads and writes around the lists, a token refresh and
+ * retries. Results that hit it say so (`truncated`).
+ */
+export const LIST_PAGE_BUDGET = 24;
+
+/** `maxPages` for each of `lists` lists read for one call, so together they stay in LIST_PAGE_BUDGET. */
+export function pagesPerList(lists: number): ListAllOptions {
+	return { maxPages: Math.max(1, Math.floor(LIST_PAGE_BUDGET / Math.max(1, lists))) };
+}
+
 const defaultSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Append query parameters. Arrays repeat the key; booleans become "true"/"false". */

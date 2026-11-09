@@ -1,10 +1,16 @@
+import {
+	acceptedContent,
+	type ElicitRequestFormParams,
+	inputRequired,
+	inputResponse,
+} from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { DEFAULT_MAX_PAGES, type GtmClient } from "../gtm/client";
 import { GtmApiError } from "../gtm/errors";
 import { type Account, accounts, type Container } from "../gtm/generated";
 import { updateAccount } from "../gtm/merge";
 import { accountPath, containerPath, isGtmId, isPublicContainerId } from "../gtm/paths";
-import type { ToolGroup } from "../mcp/registry";
+import type { ToolGroup, ToolResult } from "../mcp/registry";
 import { compact, fail, ok, okEntity, okList } from "../mcp/result";
 import { confirmGate, okPreview } from "./confirm";
 import { accountInput, confirmInput, containerInput, fingerprintInput, NO_INPUT } from "./inputs";
@@ -135,6 +141,21 @@ async function lookupContainer(gtm: GtmClient, publicId: string): Promise<Contai
 	}
 	return incomplete ? "incomplete" : undefined;
 }
+
+/** The key delete_container's elicitation uses in `inputRequests` / `inputResponses`. */
+const PUBLIC_ID_REQUEST = "publicId";
+
+/** The elicitation form: one text field. Wire-ready JSON Schema (elicitation allows flat primitives only). */
+const PUBLIC_ID_FORM: ElicitRequestFormParams["requestedSchema"] = {
+	type: "object",
+	properties: {
+		publicId: { type: "string", title: "Public container ID", description: "Starts with GTM-" },
+	},
+	required: ["publicId"],
+};
+
+/** The user's answer, validated: the client's response is untrusted. */
+const publicIdAnswer = z.object({ publicId: z.string().max(64) });
 
 export const accountTools: ToolGroup = (tools) => {
 	tools.add(
@@ -274,12 +295,14 @@ export const accountTools: ToolGroup = (tools) => {
 			}),
 			annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 		},
-		async ({ publicId, confirm, ...ids }, { gtm }) => {
+		async ({ publicId, confirm, ...ids }, { gtm }, call) => {
 			const path = containerPath(ids);
 			const container = await accounts.containers.get(gtm, { path });
 			const expected = container.publicId;
 			// The public ID must come from the user (CLAUDE.md), so neither the preview nor the
-			// refusal spells it out: the model would just copy it into the confirmed call.
+			// refusal spells it out. list_containers and friends do show it, though, so when the
+			// client can ask the user itself (elicitation), the typed-back argument doesn't count:
+			// the user types the ID into their client and the model never handles it.
 			const { publicId: _publicId, tagIds: _tagIds, ...summary } = containerSummary(container);
 			const redact = publicIdRedactor(expected);
 			const shown = {
@@ -289,25 +312,58 @@ export const accountTools: ToolGroup = (tools) => {
 				domainName: summary.domainName?.map(redact),
 				taggingServerUrls: summary.taggingServerUrls?.map(redact),
 			};
-			return confirmGate({
+			const matches = (typed: string | undefined) =>
+				!!expected && typed?.trim().toUpperCase() === expected.toUpperCase();
+			const remove = async () => {
+				await accounts.containers.delete(gtm, { path });
+				return ok({
+					deleted: { kind: "container", containerId: ids.containerId, publicId: expected },
+					note: "The container is deleted. Remove its snippet from the sites that loaded it.",
+				});
+			};
+			return confirmGate<ToolResult>({
 				confirm,
 				preview: () =>
 					okPreview(
 						{ wouldDelete: compact({ kind: "container", ...shown, publicIdMasked: maskPublicId(expected) }) },
-						`Nothing was deleted. Deleting a container removes its workspaces and versions, and every site that loads it stops getting its tags. Show the user the container name, ask them to type its public ID (GTM-…) themselves, and don't fill it in for them. Then call delete_container again with confirm: true and publicId set to what the user typed.`,
+						`Nothing was deleted. Deleting a container removes its workspaces and versions, and every site that loads it stops getting its tags. ${
+							call.canElicit
+								? "Get the user's go-ahead, then call delete_container again with confirm: true (no publicId): their MCP client will ask them to type the public ID."
+								: "Show the user the container name and ask them to type its public ID (GTM-…) themselves. This client can't ask the user directly, so the ID must come from the user's own message: never copy it from list_containers, get_container, lookup_container or any other tool result. Then call delete_container again with confirm: true and publicId set to what the user typed."
+						}`,
 					),
 				apply: async () => {
-					// The public ID typed back (CLAUDE.md): proof the user means this container.
-					if (!expected || publicId?.trim().toUpperCase() !== expected.toUpperCase()) {
+					if (!call.canElicit) {
+						// No elicitation: the public ID typed back (CLAUDE.md) is the proof the user means it.
+						if (!matches(publicId)) {
+							return fail(
+								`Nothing was deleted: publicId does not match the public ID of container ${ids.containerId}. Ask the user to type it.`,
+							);
+						}
+						return remove();
+					}
+					const answer = inputResponse(call.inputResponses, PUBLIC_ID_REQUEST);
+					if (answer.kind !== "elicit") {
+						// First confirmed round: have the client ask the user, then retry this call.
+						const name = shown.name ? `"${shown.name}" ` : "";
+						return inputRequired({
+							inputRequests: {
+								[PUBLIC_ID_REQUEST]: inputRequired.elicit({
+									message: `Permanently delete GTM container ${name}(${maskPublicId(expected) ?? ids.containerId})? Its workspaces and versions are deleted, and every site that loads it stops getting its tags. To confirm, type the container's public ID (GTM-…).`,
+									requestedSchema: PUBLIC_ID_FORM,
+								}),
+							},
+						});
+					}
+					if (answer.action !== "accept")
+						return ok({ deleted: false, note: "Nothing was deleted: the user cancelled." });
+					const typed = acceptedContent(call.inputResponses, PUBLIC_ID_REQUEST, publicIdAnswer)?.publicId;
+					if (!matches(typed)) {
 						return fail(
-							`Nothing was deleted: publicId does not match the public ID of container ${ids.containerId}. Ask the user to type it.`,
+							`Nothing was deleted: the public ID the user typed does not match container ${ids.containerId}'s.`,
 						);
 					}
-					await accounts.containers.delete(gtm, { path });
-					return ok({
-						deleted: { kind: "container", containerId: ids.containerId, publicId: expected },
-						note: "The container is deleted. Remove its snippet from the sites that loaded it.",
-					});
+					return remove();
 				},
 			});
 		},

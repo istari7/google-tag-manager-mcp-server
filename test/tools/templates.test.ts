@@ -1,6 +1,7 @@
 // list/get/create/update/delete_template, import_gallery_template.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { LIST_PAGE_BUDGET } from "../../src/gtm/client";
 import { UNPUBLISHED_CHANGES_NOTE } from "../../src/gtm/quirks";
 import { templateInfo, templateType } from "../../src/tools/templates";
 import {
@@ -209,6 +210,27 @@ describe("update_template", () => {
 });
 
 describe("delete_template", () => {
+	it("on a huge workspace the preview stays in the page budget and says it could not check all", async () => {
+		const many = (key: string, id: string) =>
+			pages(
+				key,
+				Array.from({ length: 20 }, (_, n) => [{ [id]: `${n + 1}`, name: `${key} ${n}`, type: "html" }]),
+			);
+		const mock = mockGtm({
+			[TEMPLATE]: byMethod({ GET: () => json(custom) }),
+			[`${WORKSPACE}/tags`]: many("tag", "tagId"),
+			[`${WORKSPACE}/variables`]: many("variable", "variableId"),
+		});
+		const result = await callTool("delete_template", { ...WORKSPACE_ARGS, templateId: "12" });
+		expect(mock.gtm().filter((c) => c.url.includes("/tags") || c.url.includes("/variables"))).toHaveLength(
+			LIST_PAGE_BUDGET,
+		);
+		expect(result.json()).toMatchObject({
+			preview: true,
+			wouldDelete: { kind: "template", partial: true, partialNote: expect.stringContaining("Could not check all") },
+		});
+	});
+
 	it("without confirm: true previews, listing the tags and variables of the template's type", async () => {
 		const type = `cvt_${CONTAINER_ID}_12`;
 		const mock = mockGtm({
@@ -250,12 +272,53 @@ describe("delete_template", () => {
 describe("import_gallery_template", () => {
 	const URL_PATH = `${WORKSPACE}/templates:import_from_gallery`;
 
-	it("POSTs templates:import_from_gallery with owner, repository and acknowledgePermissions=true, no body", async () => {
+	it.each([{}, { confirm: false }])(
+		"without confirm: true (%o) sends nothing and previews what importing accepts",
+		async (extra) => {
+			const mock = mockGtm({});
+			const result = await callTool("import_gallery_template", {
+				...WORKSPACE_ARGS,
+				galleryOwner: "example",
+				galleryRepository: "gtm-cookie-banner",
+				...extra,
+			});
+			expect(mock.gtm()).toHaveLength(0);
+			const out = result.json<{ preview: boolean; wouldImport: Record<string, unknown>; message: string }>();
+			expect(out.preview).toBe(true);
+			expect(out.wouldImport).toEqual({
+				owner: "example",
+				repository: "gtm-cookie-banner",
+				sha: "latest",
+				source: "https://github.com/example/gtm-cookie-banner",
+				into: WORKSPACE,
+			});
+			expect(out.message).toContain("accepts, on the user's behalf, every permission the template declares");
+			expect(out.message).toContain("The GTM API can't read a gallery template before importing it");
+			expect(out.message).toContain("confirm: true");
+		},
+	);
+
+	it("the preview names the pinned commit", async () => {
+		mockGtm({});
+		const sha = "0123456789abcdef0123456789abcdef01234567";
+		const result = await callTool("import_gallery_template", {
+			...WORKSPACE_ARGS,
+			galleryOwner: "example",
+			galleryRepository: "gtm-cookie-banner",
+			gallerySha: sha,
+		});
+		expect(result.json()).toMatchObject({
+			wouldImport: { sha, source: `https://github.com/example/gtm-cookie-banner/tree/${sha}` },
+		});
+	});
+
+	it("with confirm: true POSTs templates:import_from_gallery with owner, repository and acknowledgePermissions=true, no body", async () => {
 		const mock = mockGtm({ [URL_PATH]: byMethod({ POST: () => json(gallery) }) });
 		const result = await callTool("import_gallery_template", {
 			...WORKSPACE_ARGS,
 			galleryOwner: "example",
 			galleryRepository: "gtm-cookie-banner",
+			confirm: true,
 		});
 		expect(mock.gtm().map(describeCall)).toEqual([
 			{
@@ -279,6 +342,7 @@ describe("import_gallery_template", () => {
 			galleryOwner: "example",
 			galleryRepository: "gtm-cookie-banner",
 			gallerySha: "0123456789abcdef0123456789abcdef01234567",
+			confirm: true,
 		});
 		expect(describeCall(mock.gtm()[0]).query).toMatchObject({ gallerySha: "0123456789abcdef0123456789abcdef01234567" });
 	});
@@ -289,7 +353,7 @@ describe("import_gallery_template", () => {
 		{ galleryOwner: "o", galleryRepository: "r", gallerySha: "main" },
 	])("refuses %o before any request", async (args) => {
 		const mock = mockGtm({});
-		const result = await callTool("import_gallery_template", { ...WORKSPACE_ARGS, ...args });
+		const result = await callTool("import_gallery_template", { ...WORKSPACE_ARGS, ...args, confirm: true });
 		expect(result.isError).toBe(true);
 		expect(mock.gtm()).toHaveLength(0);
 	});

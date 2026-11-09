@@ -19,6 +19,7 @@ import {
 	FAKE_GOOGLE_TOKEN,
 	json,
 	mockGtm,
+	modernToolCall,
 	pages,
 	reply,
 } from "./helpers";
@@ -263,6 +264,8 @@ describe("delete_container", () => {
 				publicIdMasked: "GTM-*****34",
 			});
 			expect(out.message).toContain("ask them to type its public ID");
+			// 2025-era clients can't be asked directly (stateless transport): say where the ID must come from.
+			expect(out.message).toContain("must come from the user's own message");
 			// CLAUDE.md: the user types the ID back, so the model must not get a copyable one.
 			expect(result.text).not.toContain("GTM-ABC1234");
 		},
@@ -320,6 +323,96 @@ describe("delete_container", () => {
 			deleted: { kind: "container", containerId: CONTAINER_ID, publicId: "GTM-ABC1234" },
 			note: "The container is deleted. Remove its snippet from the sites that loaded it.",
 		});
+	});
+});
+
+describe("delete_container with elicitation (2026-07-28 clients)", () => {
+	const ELICIT = { elicitation: { form: {} } };
+	const text = (result: Record<string, unknown> | undefined) =>
+		((result?.content as Array<{ text: string }> | undefined) ?? []).map((c) => c.text).join("");
+
+	it("without confirm previews and says the client will ask, never spelling out the public ID", async () => {
+		const mock = mockGtm({ [CONTAINER]: byMethod({ GET: reply(container) }) });
+		const { result, error } = await modernToolCall("delete_container", CONTAINER_ARGS, { capabilities: ELICIT });
+		expect(error).toBeUndefined();
+		expect(mock.gtm().map(describeCall)).toMatchObject([{ method: "GET", path: CONTAINER }]);
+		const out = JSON.parse(text(result)) as { preview: boolean; message: string };
+		expect(out.preview).toBe(true);
+		expect(out.message).toContain("their MCP client will ask them to type the public ID");
+		expect(text(result)).not.toContain("GTM-ABC1234");
+	});
+
+	it("confirmed, asks the user for the public ID (elicitation/create) and deletes nothing yet", async () => {
+		const mock = mockGtm({ [CONTAINER]: byMethod({ GET: reply(container) }) });
+		// A publicId the model copied from list_containers doesn't count when the client can ask.
+		const { result, error } = await modernToolCall(
+			"delete_container",
+			{ ...CONTAINER_ARGS, confirm: true, publicId: "GTM-ABC1234" },
+			{ capabilities: ELICIT },
+		);
+		expect(error).toBeUndefined();
+		expect(result).toMatchObject({
+			resultType: "input_required",
+			inputRequests: {
+				publicId: {
+					method: "elicitation/create",
+					params: {
+						mode: "form",
+						message: expect.stringContaining('"example.com" (GTM-*****34)'),
+						requestedSchema: { type: "object", properties: { publicId: { type: "string" } } },
+					},
+				},
+			},
+		});
+		expect(JSON.stringify(result)).not.toContain("GTM-ABC1234");
+		expect(mock.gtm().filter((c) => c.method !== "GET")).toHaveLength(0);
+	});
+
+	it("deletes when the user typed the matching public ID (any case)", async () => {
+		const mock = mockGtm({ [CONTAINER]: byMethod({ GET: reply(container), DELETE: empty }) });
+		const { result } = await modernToolCall(
+			"delete_container",
+			{ ...CONTAINER_ARGS, confirm: true },
+			{
+				capabilities: ELICIT,
+				inputResponses: { publicId: { action: "accept", content: { publicId: " gtm-abc1234 " } } },
+			},
+		);
+		expect(mock.gtm().map(describeCall)).toMatchObject([
+			{ method: "GET", path: CONTAINER },
+			{ method: "DELETE", path: CONTAINER },
+		]);
+		expect(JSON.parse(text(result))).toMatchObject({ deleted: { kind: "container", publicId: "GTM-ABC1234" } });
+	});
+
+	it.each([
+		["a wrong ID", { action: "accept", content: { publicId: "GTM-WRONG99" } }, "does not match"],
+		["a decline", { action: "decline" }, "the user cancelled"],
+		["a cancel", { action: "cancel" }, "the user cancelled"],
+		["a malformed answer", { action: "accept", content: { publicId: 42 } }, "does not match"],
+	])("deletes nothing after %s, even with the right publicId argument", async (_what, answer, message) => {
+		const mock = mockGtm({ [CONTAINER]: byMethod({ GET: reply(container) }) });
+		const { result } = await modernToolCall(
+			"delete_container",
+			{ ...CONTAINER_ARGS, confirm: true, publicId: "GTM-ABC1234" },
+			{ capabilities: ELICIT, inputResponses: { publicId: answer } },
+		);
+		expect(text(result)).toContain(message);
+		expect(mock.gtm().filter((c) => c.method !== "GET")).toHaveLength(0);
+	});
+
+	it("without the elicitation capability falls back to the typed-back publicId", async () => {
+		const mock = mockGtm({ [CONTAINER]: byMethod({ GET: reply(container), DELETE: empty }) });
+		const preview = await modernToolCall("delete_container", CONTAINER_ARGS, { capabilities: {} });
+		expect(text(preview.result)).toContain("must come from the user's own message");
+		const { result } = await modernToolCall(
+			"delete_container",
+			{ ...CONTAINER_ARGS, confirm: true, publicId: "GTM-ABC1234" },
+			{ capabilities: {} },
+		);
+		expect(result?.resultType).not.toBe("input_required");
+		expect(JSON.parse(text(result))).toMatchObject({ deleted: { kind: "container" } });
+		expect(mock.gtm().filter((c) => c.method === "DELETE")).toHaveLength(1);
 	});
 });
 

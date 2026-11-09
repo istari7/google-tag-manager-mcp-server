@@ -86,4 +86,4 @@ workspace is slower and error-prone.
 - Never delete things as a by-product of another task; raise deletions as
   their own proposal. `delete_workspace` discards unversioned work, and
   `delete_container` removes the container and its versions for good: it
-  needs the container's public ID typed back.
+  needs the container's public ID typed by the user.

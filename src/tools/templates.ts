@@ -9,14 +9,16 @@
 // (BSD-3-Clause; gtm/tool_templates.go, gtm/tool_*_template.go). See NOTICE.
 
 import { z } from "zod";
-import type { GtmClient } from "../gtm/client";
+import { type GtmClient, pagesPerList } from "../gtm/client";
 import { accounts, type CustomTemplate } from "../gtm/generated";
 import { updateTemplate } from "../gtm/merge";
 import { templatePath, workspacePath } from "../gtm/paths";
 import type { ToolGroup } from "../mcp/registry";
 import { fail, okEntity } from "../mcp/result";
+import { confirmGate, okPreview } from "./confirm";
 import { addDeleteTool, addListTool, workspaceEntity } from "./entity";
-import { fingerprintInput, gtmId, nameInput, workspaceInput } from "./inputs";
+import { confirmInput, fingerprintInput, gtmId, nameInput, type WorkspaceInput, workspaceInput } from "./inputs";
+import { incompleteCheckNote, listTags, listVariables } from "./references";
 import { isEmptyPatch, okWrite } from "./write";
 
 const ws = accounts.containers.workspaces;
@@ -71,25 +73,25 @@ export function templateRow(t: CustomTemplate) {
 	};
 }
 
-/** Tags and variables whose type is this template's: what a delete would break. */
-async function templateUsers(gtm: GtmClient, parent: string, type: string | undefined) {
+/**
+ * Tags and variables whose type is this template's: what a delete would break. Both lists share
+ * LIST_PAGE_BUDGET (Workers' subrequest cap); on a huge workspace the check is partial.
+ */
+async function templateUsers(gtm: GtmClient, ids: WorkspaceInput, type: string | undefined) {
 	if (type === undefined) return {};
-	const [tags, variables] = await Promise.all([
-		gtm.listAll(
-			(pageToken) => ws.tags.list(gtm, { parent, pageToken }),
-			(page) => page.tag,
-		),
-		gtm.listAll(
-			(pageToken) => ws.variables.list(gtm, { parent, pageToken }),
-			(page) => page.variable,
-		),
-	]);
+	const budget = pagesPerList(2);
+	const [tags, variables] = await Promise.all([listTags(gtm, ids, budget), listVariables(gtm, ids, budget)]);
 	const usedBy = [
 		...tags.items.filter((t) => t.type === type).map((t) => `tag ${t.tagId} "${t.name}"`),
 		...variables.items.filter((v) => v.type === type).map((v) => `variable ${v.variableId} "${v.name}"`),
 	];
+	const complete = !tags.truncated && !variables.truncated;
 	// deleteWithConfirm compacts the preview, so an empty usedBy disappears.
-	return { usedBy, usedByNote: usedBy.length ? "These use the template: delete or change them first." : undefined };
+	return {
+		usedBy,
+		usedByNote: usedBy.length ? "These use the template: delete or change them first." : undefined,
+		...(complete ? {} : { partial: true, partialNote: incompleteCheckNote("template", "tags or variables") }),
+	};
 }
 
 /** The write result: the row plus the new fingerprint (for a follow-up update_template). */
@@ -194,28 +196,53 @@ export const templateTools: ToolGroup = (tools) => {
 		name: "delete_template",
 		description:
 			"Delete a custom template. Without confirm: true, only previews, listing the tags and variables that use it.",
-		related: (ids, { gtm }, found) => templateUsers(gtm, workspacePath(ids), templateType(found)),
+		related: (ids, { gtm }, found) => templateUsers(gtm, ids, templateType(found)),
 	});
 
 	tools.add(
 		"import_gallery_template",
 		{
 			description:
-				"Import a Community Template Gallery template from GitHub, accepting its declared permissions. Returns the type for create_tag.",
-			input: workspaceInput.extend({ galleryOwner, galleryRepository, gallerySha }),
-			annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
-		},
-		async ({ galleryOwner, galleryRepository, gallerySha, ...ids }, { gtm }) => {
-			// acknowledgePermissions must be true or Google refuses the import; the description
-			// tells the model it accepts the template's permissions.
-			const imported = await templates.importFromGallery(gtm, {
-				parent: workspacePath(ids),
+				"Import a Community Template Gallery template from GitHub, accepting its declared permissions. Without confirm: true, only previews.",
+			input: workspaceInput.extend({
 				galleryOwner,
 				galleryRepository,
 				gallerySha,
-				acknowledgePermissions: true,
-			});
-			return okWrite(templateResult(imported));
+				confirm: confirmInput("import it and accept its permissions"),
+			}),
+			annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
 		},
+		async ({ galleryOwner, galleryRepository, gallerySha, confirm, ...ids }, { gtm }) =>
+			confirmGate({
+				confirm,
+				// The GTM API has no way to read a gallery template before importing it, so the
+				// preview can only name it and say what importing accepts.
+				preview: () => {
+					const repo = `https://github.com/${galleryOwner}/${galleryRepository}`;
+					return okPreview(
+						{
+							wouldImport: {
+								owner: galleryOwner,
+								repository: galleryRepository,
+								sha: gallerySha ?? "latest",
+								source: gallerySha ? `${repo}/tree/${gallerySha}` : repo,
+								into: workspacePath(ids),
+							},
+						},
+						"Nothing was imported. Importing accepts, on the user's behalf, every permission the template declares (in its template.tpl: e.g. which URLs it may load scripts from or send data to, cookies, data layer access). The GTM API can't read a gallery template before importing it, so those permissions are not shown here: check them in the repository and tell the user what they allow. Get the user's go-ahead, then call import_gallery_template again with confirm: true.",
+					);
+				},
+				// acknowledgePermissions must be true or Google refuses the import.
+				apply: async () => {
+					const imported = await templates.importFromGallery(gtm, {
+						parent: workspacePath(ids),
+						galleryOwner,
+						galleryRepository,
+						gallerySha,
+						acknowledgePermissions: true,
+					});
+					return okWrite(templateResult(imported));
+				},
+			}),
 	);
 };

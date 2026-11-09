@@ -3,7 +3,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GetWorkspaceStatusResponse, Workspace } from "../../src/gtm/generated";
-import { UNPUBLISHED_CHANGES_NOTE } from "../../src/gtm/quirks";
+import { AUTO_EVENT_FILTER_WARNING, normalizeTrigger, UNPUBLISHED_CHANGES_NOTE } from "../../src/gtm/quirks";
 import { ga4EventTag, linkClickTrigger } from "../fixtures/gtm";
 import {
 	byMethod,
@@ -200,10 +200,15 @@ describe("resolve_workspace_conflict", () => {
 				method: "POST",
 				path: RESOLVE,
 				query: { fingerprint: "555" },
-				body: { trigger: resolved, changeStatus: "updated" },
+				// Q3/Q4: the same fixes update_trigger applies.
+				body: { trigger: normalizeTrigger(resolved).value, changeStatus: "updated" },
 			}),
 		]);
-		expect(result.json()).toEqual({ resolved: { kind: "trigger", id: "34" }, note: UNPUBLISHED_CHANGES_NOTE });
+		expect(result.json()).toEqual({
+			resolved: { kind: "trigger", id: "34" },
+			warnings: [AUTO_EVENT_FILTER_WARNING],
+			note: UNPUBLISHED_CHANGES_NOTE,
+		});
 	});
 
 	it("with confirm: true and no fingerprint, takes it from the conflict", async () => {
@@ -225,7 +230,12 @@ describe("resolve_workspace_conflict", () => {
 
 	it("refuses zero or two entities, and an entity without a numeric ID, before calling Google", async () => {
 		const mock = mockGtm();
-		for (const args of [{}, { trigger: resolved, tag: ga4EventTag }, { tag: { name: "no id" } }]) {
+		for (const args of [
+			{},
+			{ trigger: resolved, tag: ga4EventTag },
+			{ tag: { name: "no id", type: "html" } },
+			{ tag: { tagId: "5", name: "no type" } },
+		]) {
 			const result = await callTool("resolve_workspace_conflict", { ...WORKSPACE_ARGS, ...args, confirm: true });
 			expect(result.isError).toBe(true);
 			expect(result.text).toContain("Nothing was resolved");
@@ -265,26 +275,136 @@ describe("bulk_update_workspace", () => {
 			}),
 		});
 		const result = await callTool("bulk_update_workspace", { ...WORKSPACE_ARGS, changes, confirm: true });
+		// The changes as given, except the linkClick trigger, fixed as update_trigger would (Q3/Q4).
+		const sent = changes.map((c) => (c.trigger ? { ...c, trigger: normalizeTrigger(c.trigger).value } : c));
+		expect(sent[2]?.trigger).toMatchObject({ waitForTags: { type: "boolean" }, filter: expect.any(Array) });
+		expect(sent[2]?.trigger).not.toHaveProperty("autoEventFilter");
 		expect(mock.gtm().map(describeCall)).toEqual([
-			expect.objectContaining({ method: "POST", path: BULK, query: {}, body: { changes } }),
+			expect.objectContaining({ method: "POST", path: BULK, query: {}, body: { changes: sent } }),
 		]);
 		expect(result.json()).toEqual({
 			applied: 4,
 			changed: [{ kind: "folder", id: "20", name: "Checkout", changeStatus: "added" }],
+			warnings: [`changes[2] (trigger 34): ${AUTO_EVENT_FILTER_WARNING}`],
 			note: UNPUBLISHED_CHANGES_NOTE,
 		});
 	});
 
 	it.each([
-		[{ changeStatus: "added", tag: { tagId: "12", name: "x" } }, 'an added tag needs an ID like "new_1"'],
-		[{ changeStatus: "updated", tag: { tagId: "new_1" } }, "the tag needs its numeric ID"],
+		[{ changeStatus: "added", tag: { tagId: "12", name: "x", type: "html" } }, 'an added tag needs an ID like "new_1"'],
+		[{ changeStatus: "updated", tag: { tagId: "new_1", name: "x", type: "html" } }, "the tag needs its numeric ID"],
 		[{ changeStatus: "deleted" }, "exactly one of tag, trigger, variable or folder"],
+		[{ changeStatus: "added", tag: { tagId: "new_1", name: "x" } }, "changes[0]: the tag needs type"],
+		[{ changeStatus: "updated", trigger: { triggerId: "3", type: "click" } }, "the trigger needs name"],
+		[{ changeStatus: "updated", variable: { variableId: "3", name: " " } }, "the variable needs name and type"],
+		[{ changeStatus: "added", folder: { folderId: "new_1" } }, "the folder needs name"],
+		[
+			{ changeStatus: "added", tag: { tagId: "new_1", name: "x", type: "html", consentTypes: ["ad_storage"] } },
+			'consentTypes needs consentStatus: "needed"',
+		],
 	])("refuses %o before calling Google, even with confirm: true", async (change, text) => {
 		const mock = mockGtm();
 		const result = await callTool("bulk_update_workspace", { ...WORKSPACE_ARGS, changes: [change], confirm: true });
 		expect(result.isError).toBe(true);
 		expect(result.text).toContain(text);
 		expect(mock.calls).toHaveLength(0);
+	});
+
+	it("applies the create/update quirk fixes (Q5, Q14, Q15) and reports them in the preview", async () => {
+		const mock = mockGtm();
+		const result = await callTool("bulk_update_workspace", {
+			...WORKSPACE_ARGS,
+			changes: [
+				{
+					changeStatus: "added",
+					trigger: {
+						triggerId: "new_1",
+						name: "Click - not PDF",
+						type: "click",
+						autoEventFilter: [
+							{
+								type: "doesNotContain",
+								parameter: [
+									{ type: "template", key: "arg0", value: "{{Click URL}}" },
+									{ type: "template", key: "arg1", value: ".pdf" },
+								],
+							},
+						],
+					},
+				},
+				{ changeStatus: "deleted", trigger: { triggerId: "40" } },
+			],
+		});
+		expect(mock.calls).toHaveLength(0);
+		expect(result.json()).toMatchObject({
+			preview: true,
+			wouldApply: [
+				{ changeStatus: "added", kind: "trigger", id: "new_1" },
+				{ changeStatus: "deleted", kind: "trigger", id: "40" },
+			],
+			warnings: [`changes[0] (trigger new_1): ${AUTO_EVENT_FILTER_WARNING}`],
+		});
+	});
+
+	it("sends the fixed entities when confirmed: doesNotContain, consent shorthand, DLV default", async () => {
+		const BULK_ROUTE = { [BULK]: byMethod({ POST: reply({}) }) };
+		const mock = mockGtm(BULK_ROUTE);
+		await callTool("bulk_update_workspace", {
+			...WORKSPACE_ARGS,
+			confirm: true,
+			changes: [
+				{
+					changeStatus: "updated",
+					trigger: {
+						triggerId: "41",
+						name: "Custom - not test",
+						type: "customEvent",
+						customEventFilter: [
+							{ type: "doesNotContain", parameter: [{ type: "template", key: "arg1", value: "test" }] },
+						],
+						uniqueTriggerId: { type: "template", value: "x" },
+					},
+				},
+				{
+					changeStatus: "added",
+					tag: { tagId: "new_1", name: "HTML", type: "html", consentStatus: "needed", consentTypes: ["ad_storage"] },
+				},
+				{
+					changeStatus: "updated",
+					variable: {
+						variableId: "9",
+						name: "DLV - x",
+						type: "v",
+						parameter: [{ type: "integer", key: "defaultValue", value: "" }],
+					},
+				},
+			],
+		});
+		const body = describeCall(mock.gtm()[0]).body as { changes: Array<Record<string, Record<string, unknown>>> };
+		expect(body.changes[0]?.trigger).toEqual({
+			triggerId: "41",
+			name: "Custom - not test",
+			type: "customEvent",
+			customEventFilter: [
+				{
+					type: "contains",
+					parameter: [
+						{ type: "template", key: "arg1", value: "test" },
+						{ type: "boolean", key: "negate", value: "true" },
+					],
+				},
+			],
+		});
+		expect(body.changes[1]?.tag).toEqual({
+			tagId: "new_1",
+			name: "HTML",
+			type: "html",
+			consentSettings: {
+				consentStatus: "needed",
+				consentType: { type: "list", list: [{ type: "template", value: "ad_storage" }] },
+			},
+		});
+		expect(body.changes[2]?.variable?.parameter).toEqual([{ type: "template", key: "defaultValue", value: "" }]);
 	});
 
 	it("refuses an empty change list", async () => {

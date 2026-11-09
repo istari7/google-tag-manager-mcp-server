@@ -3,8 +3,10 @@
 // confirm-gated (./confirm.ts), as in Paolo's server. None of them changes the live site.
 
 import { z } from "zod";
-import { accounts, type Entity, type Folder, type Tag, type Trigger, type Variable } from "../gtm/generated";
+import { GtmInputError } from "../gtm/errors";
+import { accounts, type Entity, type Folder, type Variable } from "../gtm/generated";
 import { containerPath, isGtmId, workspacePath } from "../gtm/paths";
+import { normalizeTag, normalizeTrigger, normalizeVariable, type TagInput, type TriggerInput } from "../gtm/quirks";
 import type { ToolGroup } from "../mcp/registry";
 import { fail } from "../mcp/result";
 import { confirmGate, okPreview } from "./confirm";
@@ -18,17 +20,18 @@ const versionHeaders = accounts.containers.versionHeaders;
 // ---- Entities in the GTM shape --------------------------------------------------------
 
 /**
- * One entity, as get_* returns it. Google checks the fields; we only check the ID. Typed
- * as the generated entity so the request body stays a generated `Entity`.
+ * One entity, as get_* returns it (plus the shorthands create_* accepts: consentStatus on a
+ * tag, doesNotContain / negate in trigger conditions). Google checks most fields; onlyEntity
+ * checks the ID and the fields every entity needs, and applies the create/update quirk fixes.
  */
 const entityFields = {
 	tag: z
 		.looseObject({})
-		.transform((v): Tag => v)
+		.transform((v): TagInput => v)
 		.optional(),
 	trigger: z
 		.looseObject({})
-		.transform((v): Trigger => v)
+		.transform((v): TriggerInput => v)
 		.optional(),
 	variable: z
 		.looseObject({})
@@ -40,19 +43,70 @@ const entityFields = {
 		.optional(),
 };
 
-type EntityFields = { tag?: Tag; trigger?: Trigger; variable?: Variable; folder?: Folder };
+type EntityFields = { tag?: TagInput; trigger?: TriggerInput; variable?: Variable; folder?: Folder };
 
-/** The one entity in a change, with its kind and ID; a message when there isn't exactly one. */
-function onlyEntity(change: EntityFields): { kind: string; id: string | undefined; entity: Entity } | string {
-	const present = [
-		change.tag && { kind: "tag", id: change.tag.tagId, entity: { tag: change.tag } },
-		change.trigger && { kind: "trigger", id: change.trigger.triggerId, entity: { trigger: change.trigger } },
-		change.variable && { kind: "variable", id: change.variable.variableId, entity: { variable: change.variable } },
-		change.folder && { kind: "folder", id: change.folder.folderId, entity: { folder: change.folder } },
-	].filter((x) => x !== undefined);
-	const [first] = present;
-	if (present.length !== 1 || !first) return "each change needs exactly one of tag, trigger, variable or folder";
-	return first;
+type ChangeStatus = "added" | "updated" | "deleted";
+
+interface CheckedEntity {
+	kind: string;
+	id: string | undefined;
+	/** The entity to send, quirk fixes applied. */
+	entity: Entity;
+	/** What the fixes changed (quirks.ts), as create_* and update_* report it. */
+	warnings: string[];
+}
+
+const hasText = (value: unknown) => typeof value === "string" && value.trim() !== "";
+
+/** The fields GTM needs to add or replace an entity whole: a name, and a type except on folders. */
+function missingFields(entity: { name?: unknown; type?: unknown }, typed: boolean): string | undefined {
+	const missing = [!hasText(entity.name) && "name", typed && !hasText(entity.type) && "type"].filter(Boolean);
+	return missing.length ? `needs ${missing.join(" and ")}` : undefined;
+}
+
+/**
+ * The one entity in a change, with its kind and ID, checked and normalised the way
+ * create_* and update_* do it: Q14 (tag consent shorthand), Q3/Q4/Q5/Q6 (trigger conditions:
+ * autoEventFilter → filter on click/linkClick/formSubmission, doesNotContain, negate,
+ * uniqueTriggerId), Q15 (Data Layer Variable defaultValue). A deleted entity needs only its
+ * ID. Returns a message when the change can't be sent.
+ */
+function onlyEntity(change: EntityFields, changeStatus: ChangeStatus | undefined): CheckedEntity | string {
+	const count = [change.tag, change.trigger, change.variable, change.folder].filter((e) => e !== undefined).length;
+	if (count !== 1) return "each change needs exactly one of tag, trigger, variable or folder";
+	const deleted = changeStatus === "deleted";
+	const check = (kind: string, entity: { name?: unknown; type?: unknown }, typed: boolean) =>
+		deleted ? undefined : missingFields(entity, typed) && `the ${kind} ${missingFields(entity, typed)}`;
+	try {
+		if (change.tag) {
+			const problem = check("tag", change.tag, true);
+			if (problem) return problem;
+			const { value, warnings } = deleted ? { value: change.tag, warnings: [] } : normalizeTag(change.tag);
+			return { kind: "tag", id: change.tag.tagId, entity: { tag: value }, warnings };
+		}
+		if (change.trigger) {
+			const problem = check("trigger", change.trigger, true);
+			if (problem) return problem;
+			// Always normalised: a deleted trigger's conditions must be in Google's shape too.
+			const { value, warnings } = normalizeTrigger(change.trigger);
+			return { kind: "trigger", id: change.trigger.triggerId, entity: { trigger: value }, warnings };
+		}
+		if (change.variable) {
+			const problem = check("variable", change.variable, true);
+			if (problem) return problem;
+			const { value, warnings } = deleted
+				? { value: change.variable, warnings: [] }
+				: normalizeVariable(change.variable);
+			return { kind: "variable", id: change.variable.variableId, entity: { variable: value }, warnings };
+		}
+	} catch (error) {
+		if (error instanceof GtmInputError) return error.message;
+		throw error;
+	}
+	const folder = change.folder ?? {};
+	const problem = check("folder", folder, false);
+	if (problem) return problem;
+	return { kind: "folder", id: folder.folderId, entity: { folder }, warnings: [] };
 }
 
 /** The fingerprint of whatever entity `e` holds. */
@@ -136,7 +190,7 @@ export const workspaceAdminTools: ToolGroup = (tools) => {
 			annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
 		},
 		async ({ tag, trigger, variable, folder, changeStatus, fingerprint, confirm, ...ids }, { gtm }) => {
-			const given = onlyEntity({ tag, trigger, variable, folder });
+			const given = onlyEntity({ tag, trigger, variable, folder }, changeStatus);
 			if (typeof given === "string") return fail(`Nothing was resolved: ${given}.`);
 			if (!isGtmId(given.id)) return fail(`Nothing was resolved: the ${given.kind} needs its numeric ID.`);
 			const path = workspacePath(ids);
@@ -167,6 +221,7 @@ export const workspaceAdminTools: ToolGroup = (tools) => {
 									: "deleted in the latest version",
 								fingerprint: fingerprintOf(conflict.entityInWorkspace),
 							},
+							...(given.warnings.length ? { warnings: given.warnings } : {}),
 						},
 						"Nothing was resolved. The workspace's version of this entity would be replaced by the one you send. Get the user's go-ahead, then call resolve_workspace_conflict again with confirm: true and this fingerprint.",
 					);
@@ -179,7 +234,7 @@ export const workspaceAdminTools: ToolGroup = (tools) => {
 						fp = fingerprintOf(conflict.entityInWorkspace);
 					}
 					await workspaces.resolveConflict(gtm, { path, fingerprint: fp }, { ...given.entity, changeStatus });
-					return okWrite({ resolved: { kind: given.kind, id: given.id } });
+					return okWrite({ resolved: { kind: given.kind, id: given.id } }, { warnings: given.warnings });
 				},
 			});
 		},
@@ -203,8 +258,9 @@ export const workspaceAdminTools: ToolGroup = (tools) => {
 		async ({ changes, confirm, ...ids }, { gtm }) => {
 			const checked: Entity[] = [];
 			const rows: Record<string, unknown>[] = [];
+			const warnings: string[] = [];
 			for (const [i, change] of changes.entries()) {
-				const given = onlyEntity(change);
+				const given = onlyEntity(change, change.changeStatus);
 				if (typeof given === "string") return fail(`Nothing was changed: changes[${i}]: ${given}.`);
 				const added = change.changeStatus === "added";
 				if (added ? !NEW_ID.test(given.id ?? "") : !isGtmId(given.id)) {
@@ -214,20 +270,24 @@ export const workspaceAdminTools: ToolGroup = (tools) => {
 				}
 				checked.push({ ...given.entity, changeStatus: change.changeStatus });
 				rows.push({ changeStatus: change.changeStatus, ...describeEntity(given.entity) });
+				warnings.push(...given.warnings.map((w) => `changes[${i}] (${given.kind} ${given.id}): ${w}`));
 			}
 			return confirmGate({
 				confirm,
 				preview: () =>
 					okPreview(
-						{ wouldApply: rows },
+						{ wouldApply: rows, ...(warnings.length ? { warnings } : {}) },
 						"Nothing was changed. Each updated entity replaces the stored one whole. Get the user's go-ahead, then call bulk_update_workspace again with the same changes and confirm: true.",
 					),
 				apply: async () => {
 					const response = await workspaces.bulkUpdate(gtm, { path: workspacePath(ids) }, { changes: checked });
-					return okWrite({
-						applied: changes.length,
-						changed: (response?.changes ?? []).map((e) => ({ ...describeEntity(e), changeStatus: e.changeStatus })),
-					});
+					return okWrite(
+						{
+							applied: changes.length,
+							changed: (response?.changes ?? []).map((e) => ({ ...describeEntity(e), changeStatus: e.changeStatus })),
+						},
+						{ warnings },
+					);
 				},
 			});
 		},

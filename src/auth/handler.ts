@@ -40,7 +40,8 @@ function toolGroupsStatus(value: string | undefined): SetupStatus["toolGroups"] 
 		const groups = parseToolGroups(value);
 		return { groups: describeToolGroups(groups), isDefault: isDefaultSelection(groups) };
 	} catch (error) {
-		if (error instanceof ToolGroupsError) return { error: error.message };
+		// /setup is public: never echo any part of the value there.
+		if (error instanceof ToolGroupsError) return { error: error.publicMessage };
 		throw error;
 	}
 }

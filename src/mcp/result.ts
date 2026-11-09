@@ -84,7 +84,8 @@ export function okList<T, R>(key: string, list: ListAllResult<T>, toRow: (item: 
 	const out: Record<string, unknown> = { [key]: rows };
 	if (list.truncated) {
 		out.truncated = true;
-		out.note = `Only the first ${list.pages} pages were read; there are more ${key} than shown.`;
+		const read = list.pages === 1 ? "page was" : `${list.pages} pages were`;
+		out.note = `Only the first ${read} read; there are more ${key} than shown.`;
 	}
 	return ok(out);
 }

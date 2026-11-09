@@ -87,13 +87,15 @@ Every `delete_*` tool, `publish_version`, `disable_built_in_variables`,
 `update_account`, `set_user_permission`, `delete_user_permission`, and the
 admin tools that are hard to undo (`revert_workspace_entity`,
 `resolve_workspace_conflict`, `bulk_update_workspace`, `sync_workspace`,
+`import_gallery_template`,
 `undelete_version`, `set_latest_version`, `combine_containers`,
 `move_tag_id`, `reauthorize_environment`, `link_destination`, and
 `update_environment` when it repoints) change nothing without
 `confirm: true`. Call them without it, show the user the preview, and confirm
 only after the user agrees to that specific action. `delete_container` also
-needs the container's public ID typed back. Never delete as a side effect of
-another task.
+needs the container's public ID typed by the user: their client may ask them
+for it; otherwise pass only what the user typed, never an ID from a tool
+result. Never delete as a side effect of another task.
 
 Some tools are in optional tool groups the server owner may not have enabled
 (templates, zones, server-side clients, environments, admin tools). If a tool

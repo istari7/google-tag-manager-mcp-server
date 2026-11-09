@@ -1,6 +1,7 @@
 // create_variable, update_variable, delete_variable: requests sent, Q15, Q12/Q13 on update.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { LIST_PAGE_BUDGET } from "../../src/gtm/client";
 import type { Variable } from "../../src/gtm/generated";
 import { DLV_DEFAULT_VALUE_WARNING, UNPUBLISHED_CHANGES_NOTE } from "../../src/gtm/quirks";
 import { dlvVariable, errors } from "../fixtures/gtm";
@@ -210,6 +211,52 @@ describe("delete_variable", () => {
 		expect(result.text).toBe(
 			'Nothing was deleted: GTM refuses to delete variable 56 while it is still used by tags 12 "GA4 - login"; triggers 34 "CE - login"; variables 60 "JS - hashed id". First replace or remove its {{name}} in those tags, triggers and variables, or delete them.',
 		);
+	});
+
+	/** 20 pages of 1 entity each per list: far more than one call may read. */
+	function hugeWorkspace() {
+		const many = (make: (n: number) => Record<string, unknown>) => Array.from({ length: 20 }, (_, n) => [make(n)]);
+		return {
+			[`${WORKSPACE}/tags`]: pages(
+				"tag",
+				many((n) => ({ tagId: `${100 + n}`, name: `Tag ${n}` })),
+			),
+			[`${WORKSPACE}/triggers`]: pages(
+				"trigger",
+				many((n) => ({ triggerId: `${200 + n}`, name: `Trigger ${n}` })),
+			),
+			[`${WORKSPACE}/variables`]: pages(
+				"variable",
+				many((n) => ({ variableId: `${300 + n}`, name: `Var ${n}` })),
+			),
+		};
+	}
+
+	it("on a huge workspace the reference check stays in the page budget and says it could not check all", async () => {
+		const mock = mockGtm({ ...routes(), ...hugeWorkspace() });
+		const result = await callTool("delete_variable", VARIABLE_ARGS);
+		const lists = mock.gtm().filter((c) => !c.url.includes("/variables/56"));
+		expect(lists).toHaveLength(LIST_PAGE_BUDGET);
+		expect(mock.gtm().length).toBeLessThan(50);
+		expect(result.json()).toMatchObject({
+			preview: true,
+			wouldDelete: {
+				kind: "variable",
+				partial: true,
+				partialNote: expect.stringContaining("Could not check all of the workspace"),
+			},
+		});
+	});
+
+	it("after a refused DELETE on a huge workspace, the error says the check was incomplete", async () => {
+		mockGtm({
+			[VARIABLE]: byMethod({ GET: () => json(dlvVariable), DELETE: () => json(errors.stillInUse400, 400) }),
+			...hugeWorkspace(),
+		});
+		const result = await callTool("delete_variable", { ...VARIABLE_ARGS, confirm: true });
+		expect(result.isError).toBe(true);
+		expect(result.text).toContain("Nothing was deleted: GTM refused to delete variable 56.");
+		expect(result.text).toContain("Could not check all of the workspace");
 	});
 
 	it("with confirm: true sends one DELETE", async () => {

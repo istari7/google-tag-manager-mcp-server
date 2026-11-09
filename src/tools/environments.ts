@@ -103,6 +103,9 @@ export const environmentTools: ToolGroup = (tools) => {
 		},
 		async ({ accountId, containerId, environmentId, fingerprint, confirm, ...fields }, { gtm }) => {
 			if (isEmptyPatch(fields)) return fail("Nothing to update: pass at least one environment field.");
+			if (fields.containerVersionId !== undefined && fields.workspaceId !== undefined) {
+				return fail("Nothing was changed: an environment serves a version or a workspace, so pass one of them.");
+			}
 			const path = environmentPath({ accountId, containerId, environmentId });
 			const current = await environments.get(gtm, { path });
 			if (current.type !== "user") {
@@ -113,12 +116,17 @@ export const environmentTools: ToolGroup = (tools) => {
 					);
 				}
 			}
+			// Repointing replaces the target: the merged body must not keep the old one too, or the
+			// environment would name both a workspace and a version.
+			const base: Environment = { ...current };
+			if (fields.workspaceId !== undefined) delete base.containerVersionId;
+			if (fields.containerVersionId !== undefined) delete base.workspaceId;
 			const update = () =>
 				getMergePut<Environment, Partial<Environment>>({
 					path,
 					patch: fields,
 					expectedFingerprint: fingerprint,
-					get: async () => current,
+					get: async () => base,
 					put: (body, stored) => environments.update(gtm, { path, fingerprint: stored }, body),
 					normalize: (patch) => ({ value: patch, warnings: [] }),
 				}).then(({ result }) => okWrite({ environment: result }, { note: ENVIRONMENT_NOTE }));
