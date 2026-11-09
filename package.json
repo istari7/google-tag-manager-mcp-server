@@ -14,6 +14,7 @@
     "format": "biome check --write",
     "gen": "node scripts/gen-gtm.ts",
     "gen:check": "node scripts/gen-gtm.ts --check",
+    "gen:skills": "node scripts/gen-skills.ts",
     "tools-report": "node scripts/tools-report.ts"
   },
   "dependencies": {
@@ -28,6 +29,7 @@
     "@types/node": "26.6.6",
     "typescript": "7.0.2",
     "vitest": "4.1.12",
-    "wrangler": "4.158.0"
+    "wrangler": "4.158.0",
+    "yaml": "2.9.1"
   }
 }

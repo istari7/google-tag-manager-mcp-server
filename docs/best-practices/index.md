@@ -1,3 +1,8 @@
+---
+title: "GTM best practices (index)"
+description: "Start here: ground rules for every task, and which topic to read before creating or editing anything."
+---
+
 # GTM best practices
 
 Practical guidance for working on a Google Tag Manager container through this
@@ -6,21 +11,10 @@ before you create or change anything; they are short on purpose.
 
 ## Topics
 
-- **publishing** (`gtm://best-practices/publishing`): the life of a change,
-  from a draft in a workspace to a reviewed version that goes live only when
-  the user says so. Includes how to undo a bad release.
-- **naming** (`gtm://best-practices/naming`): how to name tags, triggers and
-  variables, when to use folders, and what counts as clutter.
-- **tags** (`gtm://best-practices/tags`): Google tag and GA4 event tags,
-  firing options, custom HTML, double counting.
-- **triggers** (`gtm://best-practices/triggers`): choosing a trigger type and
-  writing its conditions correctly.
-- **variables** (`gtm://best-practices/variables`): picking the right variable
-  type, built-ins, constants and lookup tables.
-- **data-layer** (`gtm://best-practices/data-layer`): what the website should
-  push, and what to ask its developer for.
-- **consent-mode** (`gtm://best-practices/consent-mode`): Consent Mode v2,
-  the consent banner tag and per-tag consent settings.
+{{topics}}
+
+For whole workflows (auditing a container, planning a change, a tracking
+plan), see the skills at `gtm://skills`.
 
 ## Ground rules for every task
 

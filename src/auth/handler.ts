@@ -1,4 +1,4 @@
-// Unprotected routes: /setup (also at /), /authorize (consent → Google), /callback (Google → MCP client).
+// Unprotected routes: /setup (also at /), /llms.txt, /authorize (consent → Google), /callback (Google → MCP client).
 // The browser-binding, state and single-use guarantees come from workers-oauth-provider's
 // beginConsent/approveConsent/beginUpstream/finishUpstream helpers.
 
@@ -9,6 +9,7 @@ import {
 	CimdFetchError,
 } from "@cloudflare/workers-oauth-provider";
 import type { Env, Props } from "../env";
+import { llmsTxtResponse } from "../skills/instructions";
 import { allowlistConfigured, isAllowed } from "./allowlist";
 import { exchangeCode, GoogleInvalidGrant, googleAuthorizeUrl, googleScopes, pkcePair, readIdToken } from "./google";
 import { consentPage, messagePage, type SetupStatus, setupPage } from "./pages";
@@ -39,6 +40,7 @@ export const authHandler = {
 			if ((url.pathname === "/setup" || url.pathname === "/") && req.method === "GET") {
 				return setupPage(url.origin, setupStatus(env));
 			}
+			if (url.pathname === "/llms.txt" && req.method === "GET") return llmsTxtResponse(url.origin);
 			if (url.pathname === "/authorize" && req.method === "GET") return await showConsent(req, env);
 			if (url.pathname === "/authorize" && req.method === "POST") return await submitConsent(req, env);
 			if (url.pathname === "/callback" && req.method === "GET") return await callback(req, env, ctx);

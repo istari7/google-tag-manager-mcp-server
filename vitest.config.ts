@@ -13,6 +13,8 @@ export default defineConfig({
 	],
 	test: {
 		include: ["test/**/*.test.ts"],
+		// Fails the run when the skills manifest is stale (`pnpm gen:skills`).
+		globalSetup: ["./test/global-setup.ts"],
 		testTimeout: 60_000,
 	},
 });

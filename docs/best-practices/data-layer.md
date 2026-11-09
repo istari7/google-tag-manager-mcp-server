@@ -1,3 +1,9 @@
+---
+title: "Data layer"
+description: "What the website should push (dataLayer.push conventions, ecommerce) and what to ask its developer for."
+order: 60
+---
+
 # Data layer
 
 The data layer is the contract between the website and the container. Tags
