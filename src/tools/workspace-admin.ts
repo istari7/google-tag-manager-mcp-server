@@ -3,9 +3,19 @@
 // confirm-gated (./confirm.ts), as in Paolo's server. None of them changes the live site.
 
 import { z } from "zod";
+import { type GtmClient, LIST_PAGE_BUDGET } from "../gtm/client";
 import { GtmInputError } from "../gtm/errors";
 import { accounts, type Entity, type Folder, type Variable } from "../gtm/generated";
-import { containerPath, isGtmId, workspacePath } from "../gtm/paths";
+import {
+	containerPath,
+	folderPath,
+	isGtmId,
+	tagPath,
+	triggerPath,
+	variablePath,
+	type WorkspaceIds,
+	workspacePath,
+} from "../gtm/paths";
 import { normalizeTag, normalizeTrigger, normalizeVariable, type TagInput, type TriggerInput } from "../gtm/quirks";
 import type { ToolGroup } from "../mcp/registry";
 import { fail } from "../mcp/result";
@@ -69,7 +79,8 @@ function missingFields(entity: { name?: unknown; type?: unknown }, typed: boolea
  * create_* and update_* do it: Q14 (tag consent shorthand), Q3/Q4/Q5/Q6 (trigger conditions:
  * autoEventFilter → filter on click/linkClick/formSubmission, doesNotContain, negate,
  * uniqueTriggerId), Q15 (Data Layer Variable defaultValue). A deleted entity needs only its
- * ID. Returns a message when the change can't be sent.
+ * ID here: bulk_update_workspace reads the rest (Q33). Returns a message when the change can't
+ * be sent.
  */
 function onlyEntity(change: EntityFields, changeStatus: ChangeStatus | undefined): CheckedEntity | string {
 	const count = [change.tag, change.trigger, change.variable, change.folder].filter((e) => e !== undefined).length;
@@ -126,6 +137,37 @@ function fingerprintOf(e: Entity | undefined): string | undefined {
 }
 
 const NEW_ID = /^new_\d+$/;
+
+/**
+ * Deleted entries bulk_update_workspace may complete with a GET each (Q33). Each GET is a
+ * subrequest; this stays inside the per-call budget the list-heavy tools use.
+ */
+const MAX_DELETE_LOOKUPS = LIST_PAGE_BUDGET;
+
+/** The stored tag, trigger, variable or folder, as an Entity. */
+async function storedEntity(gtm: GtmClient, ids: WorkspaceIds, kind: string, id: string): Promise<Entity> {
+	switch (kind) {
+		case "tag":
+			return { tag: await workspaces.tags.get(gtm, { path: tagPath({ ...ids, tagId: id }) }) };
+		case "trigger":
+			return { trigger: await workspaces.triggers.get(gtm, { path: triggerPath({ ...ids, triggerId: id }) }) };
+		case "variable":
+			return { variable: await workspaces.variables.get(gtm, { path: variablePath({ ...ids, variableId: id }) }) };
+		default:
+			return { folder: await workspaces.folders.get(gtm, { path: folderPath({ ...ids, folderId: id }) }) };
+	}
+}
+
+/** A deleted change completed from the stored entity: the caller's fields win. */
+function withStored(change: Entity, stored: Entity): Entity {
+	return {
+		...change,
+		...(change.tag && { tag: { ...stored.tag, ...change.tag } }),
+		...(change.trigger && { trigger: { ...stored.trigger, ...change.trigger } }),
+		...(change.variable && { variable: { ...stored.variable, ...change.variable } }),
+		...(change.folder && { folder: { ...stored.folder, ...change.folder } }),
+	};
+}
 
 export const workspaceAdminTools: ToolGroup = (tools) => {
 	tools.add(
@@ -257,8 +299,8 @@ export const workspaceAdminTools: ToolGroup = (tools) => {
 		},
 		async ({ changes, confirm, ...ids }, { gtm }) => {
 			const checked: Entity[] = [];
-			const rows: Record<string, unknown>[] = [];
 			const warnings: string[] = [];
+			const lookups: Array<{ index: number; kind: string; id: string }> = [];
 			for (const [i, change] of changes.entries()) {
 				const given = onlyEntity(change, change.changeStatus);
 				if (typeof given === "string") return fail(`Nothing was changed: changes[${i}]: ${given}.`);
@@ -269,9 +311,21 @@ export const workspaceAdminTools: ToolGroup = (tools) => {
 					);
 				}
 				checked.push({ ...given.entity, changeStatus: change.changeStatus });
-				rows.push({ changeStatus: change.changeStatus, ...describeEntity(given.entity) });
 				warnings.push(...given.warnings.map((w) => `changes[${i}] (${given.kind} ${given.id}): ${w}`));
+				// Q33: Google wants a deleted entity's name (and type) too; read what's missing.
+				const shown = change.tag ?? change.trigger ?? change.variable ?? change.folder ?? {};
+				if (change.changeStatus === "deleted" && missingFields(shown, given.kind !== "folder") && given.id) {
+					lookups.push({ index: i, kind: given.kind, id: given.id });
+				}
 			}
+			if (lookups.length > MAX_DELETE_LOOKUPS) {
+				return fail(
+					`Nothing was changed: ${lookups.length} deleted entries have no name or type, and GTM needs both even to delete (Q33). This tool reads at most ${MAX_DELETE_LOOKUPS} of them per call: pass each deleted entity whole, as get_* returns it, or split the changes.`,
+				);
+			}
+			const stored = await Promise.all(lookups.map((l) => storedEntity(gtm, ids, l.kind, l.id)));
+			for (const [n, l] of lookups.entries()) checked[l.index] = withStored(checked[l.index] ?? {}, stored[n] ?? {});
+			const rows = checked.map((e) => ({ changeStatus: e.changeStatus, ...describeEntity(e) }));
 			return confirmGate({
 				confirm,
 				preview: () =>

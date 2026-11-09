@@ -157,6 +157,19 @@ const PUBLIC_ID_FORM: ElicitRequestFormParams["requestedSchema"] = {
 /** The user's answer, validated: the client's response is untrusted. */
 const publicIdAnswer = z.object({ publicId: z.string().max(64) });
 
+/**
+ * delete_container after the client cancelled the form. Some clients that declare elicitation
+ * cancel a form they can't show (seen live: a Claude Code subagent), so say what happened and
+ * how the user can still delete it, without accepting the typed-back ID instead.
+ */
+function cancelledNote(publicIdPassed: boolean): string {
+	return `Nothing was deleted: the MCP client cancelled the confirmation form, so the user typed no public ID. Some clients cancel forms they can't show (e.g. in a subagent or background task). ${
+		publicIdPassed
+			? "The publicId argument was ignored: when the client says it can show forms, only the form counts. "
+			: ""
+	}To delete it, the user can run the request again where their client shows the form (e.g. the main conversation), or delete the container in the GTM UI (Admin > Container Settings > Delete Container).`;
+}
+
 export const accountTools: ToolGroup = (tools) => {
 	tools.add(
 		"list_accounts",
@@ -355,8 +368,15 @@ export const accountTools: ToolGroup = (tools) => {
 							},
 						});
 					}
-					if (answer.action !== "accept")
-						return ok({ deleted: false, note: "Nothing was deleted: the user cancelled." });
+					// The typed-back publicId never stands in for the form here: the user may have
+					// dismissed the form on purpose, and the model can copy the ID from list_containers.
+					if (answer.action === "decline") {
+						return ok({
+							deleted: false,
+							note: "Nothing was deleted: the user declined in the confirmation form. Don't retry unless they ask again.",
+						});
+					}
+					if (answer.action !== "accept") return ok({ deleted: false, note: cancelledNote(publicId !== undefined) });
 					const typed = acceptedContent(call.inputResponses, PUBLIC_ID_REQUEST, publicIdAnswer)?.publicId;
 					if (!matches(typed)) {
 						return fail(

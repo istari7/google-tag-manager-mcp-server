@@ -265,6 +265,21 @@ export function notFoundHint(resource: string): string {
 	return `Check the ${inner} ID, then the ${kinds.join("/")} ID${kinds.length > 1 ? "s" : ""}.`;
 }
 
+/**
+ * The 404 message. Two 404s seen live (Q38) are not about the IDs: zones on an account that
+ * isn't GTM 360, and a user permission for an email with no Google account.
+ */
+function notFoundMessage(resource: string, detail: string | undefined, googleMessage: string | undefined): string {
+	if (/\/user_permissions(\/|$)/.test(resource) && /user not found/i.test(googleMessage ?? "")) {
+		return `Google found no Google account for that email address: GTM can only give access to a Google account (Gmail, Google Workspace, or an address registered as a Google account). Check the address with the user. (${resource})`;
+	}
+	const base = withDetail(`Not found: ${resource}. ${notFoundHint(resource)}`, detail);
+	if (/\/zones(\/|$)/.test(resource)) {
+		return `${base} Zones exist only in GTM 360 accounts: on a standard account Google answers 404 here even when every ID is right.`;
+	}
+	return base;
+}
+
 function resourceOf(path: string): string {
 	const q = path.indexOf("?");
 	return q === -1 ? path : path.slice(0, q);
@@ -292,7 +307,8 @@ export function toGtmApiError(input: {
 			message = MESSAGES.auth;
 			break;
 		case "rateLimit":
-			message = MESSAGES.rateLimit;
+			// Google's own text, when it says more than "rate limit" (a 429 is not always one, Q31).
+			message = withDetail(MESSAGES.rateLimit, detail);
 			break;
 		case "quota":
 			message = MESSAGES.quota;
@@ -308,7 +324,7 @@ export function toGtmApiError(input: {
 			message = withDetail(`No permission for ${resource}. Check the Google account has access.`, detail);
 			break;
 		case "notFound":
-			message = withDetail(`Not found: ${resource}. ${notFoundHint(resource)}`, detail);
+			message = notFoundMessage(resource, detail, googleMessage);
 			break;
 		case "conflict":
 			message = withDetail(MESSAGES.conflict, detail);

@@ -2,9 +2,12 @@
 // revert (tag, trigger, variable, folder, zone, template, client, transformation, built-in
 // variable). One generic tool instead of nine, to save tools/list bytes; it also covers
 // Paolo's separate revert_folder. Confirm-gated: the workspace edits are lost.
+// Google ignores `?fingerprint=` on :revert (Q32), so a caller's fingerprint is checked here,
+// against a GET of the entity just before the revert.
 
 import { z } from "zod";
 import type { GtmClient } from "../gtm/client";
+import { GtmApiError, GtmInputError } from "../gtm/errors";
 import { accounts, type Entity } from "../gtm/generated";
 import {
 	clientPath,
@@ -23,7 +26,8 @@ import type { ToolGroup } from "../mcp/registry";
 import { fail } from "../mcp/result";
 import { BUILT_IN_TYPES } from "./builtins";
 import { confirmGate, okPreview } from "./confirm";
-import { confirmInput, fingerprintInput, workspaceInput } from "./inputs";
+import { type FolderContents, folderContents } from "./folders";
+import { confirmInput, workspaceInput } from "./inputs";
 import { describeEntity } from "./summaries";
 import { okWrite } from "./write";
 
@@ -96,6 +100,65 @@ async function revert(
 	}
 }
 
+/** The entity's current fingerprint (a GET), for the check Google skips on :revert (Q32). */
+async function currentFingerprint(
+	gtm: GtmClient,
+	kind: Exclude<RevertKind, "builtInVariable">,
+	ids: WorkspaceIds,
+	id: string,
+): Promise<string | undefined> {
+	switch (kind) {
+		case "tag":
+			return (await ws.tags.get(gtm, { path: tagPath({ ...ids, tagId: id }) })).fingerprint;
+		case "trigger":
+			return (await ws.triggers.get(gtm, { path: triggerPath({ ...ids, triggerId: id }) })).fingerprint;
+		case "variable":
+			return (await ws.variables.get(gtm, { path: variablePath({ ...ids, variableId: id }) })).fingerprint;
+		case "folder":
+			return (await ws.folders.get(gtm, { path: folderPath({ ...ids, folderId: id }) })).fingerprint;
+		case "zone":
+			return (await ws.zones.get(gtm, { path: zonePath({ ...ids, zoneId: id }) })).fingerprint;
+		case "template":
+			return (await ws.templates.get(gtm, { path: templatePath({ ...ids, templateId: id }) })).fingerprint;
+		case "client":
+			return (await ws.clients.get(gtm, { path: clientPath({ ...ids, clientId: id }) })).fingerprint;
+		case "transformation":
+			return (await ws.transformations.get(gtm, { path: transformationPath({ ...ids, transformationId: id }) }))
+				.fingerprint;
+	}
+}
+
+/** Throws a conflict when the entity no longer has the fingerprint the caller read (Q32). */
+async function checkFingerprint(
+	gtm: GtmClient,
+	kind: Exclude<RevertKind, "builtInVariable">,
+	ids: WorkspaceIds,
+	id: string,
+	expected: string,
+): Promise<void> {
+	let stored: string | undefined;
+	try {
+		stored = await currentFingerprint(gtm, kind, ids, id);
+	} catch (error) {
+		if (error instanceof GtmApiError && error.kind === "notFound") {
+			throw new GtmInputError(
+				`Nothing was reverted: ${kind} ${id} can't be read (it may be deleted in this workspace), so its fingerprint can't be checked. To restore it anyway, call again without fingerprint.`,
+			);
+		}
+		throw error;
+	}
+	if (stored !== expected) throw GtmApiError.conflict("POST", `${kind} ${id}`);
+}
+
+const contentRows = (c: FolderContents) => [
+	...c.tags.map((t) => `tag ${t.tagId} "${t.name ?? ""}"`),
+	...c.triggers.map((t) => `trigger ${t.triggerId} "${t.name ?? ""}"`),
+	...c.variables.map((v) => `variable ${v.variableId} "${v.name ?? ""}"`),
+];
+
+/** Q34: GTM won't revert (remove) an added folder that still holds entities. */
+const FOLDER_FIX = 'Move them out first (move_entities_to_folder with folderId "0"), or revert them too, then retry.';
+
 export const revertTools: ToolGroup = (tools) => {
 	tools.add(
 		"revert_workspace_entity",
@@ -105,7 +168,10 @@ export const revertTools: ToolGroup = (tools) => {
 			input: workspaceInput.extend({
 				kind: z.enum(REVERT_KINDS),
 				id: z.string().describe("Entity ID; for builtInVariable its type, e.g. clickUrl"),
-				fingerprint: fingerprintInput,
+				fingerprint: z
+					.string()
+					.optional()
+					.describe("From get_*: refused if the entity changed since (not builtInVariable)"),
 				confirm: confirmInput("revert"),
 			}),
 			annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
@@ -118,6 +184,9 @@ export const revertTools: ToolGroup = (tools) => {
 						? `id must be a built-in variable type such as "clickUrl" (got ${JSON.stringify(id)}).`
 						: `id must be a numeric ${kind} ID such as "123".`,
 				);
+			}
+			if (kind === "builtInVariable" && fingerprint !== undefined) {
+				return fail("Built-in variables have no fingerprint: call again without fingerprint.");
 			}
 			const workspace = workspacePath(ids);
 			return confirmGate({
@@ -132,6 +201,11 @@ export const revertTools: ToolGroup = (tools) => {
 						const e = c.entityInWorkspace ?? c.entityInBaseVersion;
 						return e !== undefined && statusId(e, kind) === id;
 					});
+					// Q34: reverting an added folder removes it, which GTM refuses while it holds anything.
+					const contents =
+						kind === "folder" && change.changeStatus === "added"
+							? contentRows(await folderContents(gtm, folderPath({ ...ids, folderId: id })))
+							: [];
 					return okPreview(
 						{
 							wouldRevert: {
@@ -141,6 +215,12 @@ export const revertTools: ToolGroup = (tools) => {
 							},
 							effect: EFFECT[change.changeStatus ?? ""] ?? "Its workspace changes are discarded.",
 							...(conflicted ? { mergeConflict: true } : {}),
+							...(contents.length > 0
+								? {
+										contains: contents,
+										warning: `GTM will refuse to remove this folder while it holds these. ${FOLDER_FIX}`,
+									}
+								: {}),
 						},
 						"Nothing was reverted. The workspace changes to this entity would be lost. Get the user's go-ahead, then call revert_workspace_entity again with confirm: true.",
 					);
@@ -151,7 +231,21 @@ export const revertTools: ToolGroup = (tools) => {
 						const r = await ws.builtInVariables.revert(gtm, { path: workspace, type: builtInType });
 						return okWrite({ reverted: { kind, id }, enabled: r?.enabled === true });
 					}
-					const after = await revert(gtm, kind, ids, id, fingerprint);
+					if (fingerprint !== undefined) await checkFingerprint(gtm, kind, ids, id, fingerprint);
+					let after: Entity;
+					try {
+						after = await revert(gtm, kind, ids, id, fingerprint);
+					} catch (error) {
+						if (kind !== "folder" || !(error instanceof GtmApiError) || error.kind !== "invalid") throw error;
+						const contents = await folderContents(gtm, folderPath({ ...ids, folderId: id })).then(
+							contentRows,
+							() => [],
+						);
+						if (contents.length === 0) throw error;
+						throw new GtmInputError(
+							`Nothing was reverted: GTM refuses to remove folder ${id} (added in this workspace) while it holds ${contents.join(", ")}. ${FOLDER_FIX}`,
+						);
+					}
 					const exists = Object.values(after).some((v) => v !== undefined);
 					return okWrite({
 						reverted: { kind, id },

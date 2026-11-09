@@ -387,8 +387,8 @@ describe("delete_container with elicitation (2026-07-28 clients)", () => {
 
 	it.each([
 		["a wrong ID", { action: "accept", content: { publicId: "GTM-WRONG99" } }, "does not match"],
-		["a decline", { action: "decline" }, "the user cancelled"],
-		["a cancel", { action: "cancel" }, "the user cancelled"],
+		["a decline", { action: "decline" }, "the user declined in the confirmation form"],
+		["a cancel", { action: "cancel" }, "the MCP client cancelled the confirmation form"],
 		["a malformed answer", { action: "accept", content: { publicId: 42 } }, "does not match"],
 	])("deletes nothing after %s, even with the right publicId argument", async (_what, answer, message) => {
 		const mock = mockGtm({ [CONTAINER]: byMethod({ GET: reply(container) }) });
@@ -399,6 +399,22 @@ describe("delete_container with elicitation (2026-07-28 clients)", () => {
 		);
 		expect(text(result)).toContain(message);
 		expect(mock.gtm().filter((c) => c.method !== "GET")).toHaveLength(0);
+	});
+
+	it("a cancelled form (e.g. a client that can't show it) says how to still delete, and ignores a matching publicId", async () => {
+		const mock = mockGtm({ [CONTAINER]: byMethod({ GET: reply(container) }) });
+		const { result } = await modernToolCall(
+			"delete_container",
+			{ ...CONTAINER_ARGS, confirm: true, publicId: "GTM-ABC1234" },
+			{ capabilities: ELICIT, inputResponses: { publicId: { action: "cancel" } } },
+		);
+		const out = JSON.parse(text(result)) as { deleted: boolean; note: string };
+		expect(out.deleted).toBe(false);
+		expect(out.note).toContain("Nothing was deleted");
+		expect(out.note).toContain("The publicId argument was ignored");
+		expect(out.note).toContain("GTM UI");
+		expect(text(result)).not.toContain("GTM-ABC1234");
+		expect(mock.gtm().filter((c) => c.method === "DELETE")).toHaveLength(0);
 	});
 
 	it("without the elicitation capability falls back to the typed-back publicId", async () => {

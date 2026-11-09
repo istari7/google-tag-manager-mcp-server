@@ -4,6 +4,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GtagConfig } from "../../src/gtm/generated";
 import { UNPUBLISHED_CHANGES_NOTE } from "../../src/gtm/quirks";
+import { errors } from "../fixtures/gtm";
 import {
 	byMethod,
 	callTool,
@@ -12,6 +13,8 @@ import {
 	json,
 	mockGtm,
 	pages,
+	reply,
+	rpc,
 	WORKSPACE,
 	WORKSPACE_ARGS,
 	writes,
@@ -62,26 +65,72 @@ describe("get_google_tag_config", () => {
 });
 
 describe("create_google_tag_config", () => {
-	it("POSTs {workspace}/gtag_config with exactly type and parameter", async () => {
+	const LIST = `${WORKSPACE}/gtag_config`;
+	const created = (call: { body: string }) =>
+		json({ ...(JSON.parse(call.body) as GtagConfig), gtagConfigId: "30", fingerprint: "9" });
+
+	it("Q31 lists the configs, then POSTs {workspace}/gtag_config with exactly type and parameter", async () => {
 		const mock = mockGtm({
-			[`${WORKSPACE}/gtag_config`]: (call) =>
-				json({ ...(JSON.parse(call.body) as GtagConfig), gtagConfigId: "30", fingerprint: "9" }),
+			[LIST]: byMethod({ GET: pages("gtagConfig", [[{ gtagConfigId: "28", type: "ogt_1p_data_v2" }]]), POST: created }),
 		});
 		const result = await callTool("create_google_tag_config", {
 			...WORKSPACE_ARGS,
-			type: "googtag",
+			type: "ogt_auto_events",
 			parameter: [parameter[0]],
 		});
-		expect(describeCall(mock.gtm()[0])).toMatchObject({
-			method: "POST",
-			path: `${WORKSPACE}/gtag_config`,
-			query: {},
-			body: { type: "googtag", parameter: [parameter[0]] },
-		});
+		expect(mock.gtm().map(describeCall)).toMatchObject([
+			{ method: "GET", path: LIST },
+			{ method: "POST", path: LIST, query: {}, body: { type: "ogt_auto_events", parameter: [parameter[0]] } },
+		]);
 		expect(result.json()).toEqual({
-			gtagConfig: { gtagConfigId: "30", type: "googtag", tagId: "G-TEST123", parameters: 1, fingerprint: "9" },
+			gtagConfig: { gtagConfigId: "30", type: "ogt_auto_events", tagId: "G-TEST123", parameters: 1, fingerprint: "9" },
 			note: UNPUBLISHED_CHANGES_NOTE,
 		});
+	});
+
+	it("Q31 refuses a second config of a type, naming the existing one, with no POST", async () => {
+		const mock = mockGtm({
+			[LIST]: byMethod({ GET: pages("gtagConfig", [[{ gtagConfigId: "89", type: "ogt_auto_events" }]]) }),
+		});
+		const result = await callTool("create_google_tag_config", { ...WORKSPACE_ARGS, type: "ogt_auto_events" });
+		expect(result).toMatchObject({
+			isError: true,
+			text: expect.stringContaining('already has a Google tag config of type "ogt_auto_events" (gtagConfigId 89)'),
+		});
+		expect(result.text).toContain("update_google_tag_config");
+		expect(writes(mock.gtm())).toHaveLength(0);
+	});
+
+	it("Q31 a 429 on the POST is not retried; when a config of the type exists by then, says so", async () => {
+		let listed = 0;
+		const mock = mockGtm({
+			[LIST]: byMethod({
+				GET: () => json({ gtagConfig: listed++ === 0 ? [] : [{ gtagConfigId: "91", type: "ogt_auto_events" }] }),
+				POST: reply(errors.tooMany429, 429),
+			}),
+		});
+		const result = await callTool("create_google_tag_config", { ...WORKSPACE_ARGS, type: "ogt_auto_events" });
+		expect(mock.gtm().map((c) => c.method)).toEqual(["GET", "POST", "GET"]);
+		expect(result).toMatchObject({ isError: true, text: expect.stringContaining("(gtagConfigId 91)") });
+	});
+
+	it("Q31 a 429 with no config of the type behind it is reported as a rate limit, after one POST", async () => {
+		const mock = mockGtm({
+			[LIST]: byMethod({ GET: reply({}), POST: reply(errors.tooMany429, 429) }),
+		});
+		const result = await callTool("create_google_tag_config", { ...WORKSPACE_ARGS, type: "ogt_auto_events" });
+		expect(writes(mock.gtm())).toHaveLength(1);
+		expect(result).toMatchObject({ isError: true, text: expect.stringContaining("rate limit") });
+	});
+
+	it('Q31 the type description names real config types, not "googtag" as an example', async () => {
+		const { result } = await rpc("tools/list");
+		const tool = (
+			result as {
+				tools: Array<{ name: string; inputSchema: { properties: Record<string, { description?: string }> } }>;
+			}
+		).tools.find((t) => t.name === "create_google_tag_config");
+		expect(tool?.inputSchema.properties.type?.description).toContain("ogt_auto_events");
 	});
 });
 

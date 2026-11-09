@@ -6,7 +6,7 @@ import type { ToolGroup } from "../mcp/registry";
 import { fail, ok, okEntity, okList } from "../mcp/result";
 import { deleteWithConfirm } from "./confirm";
 import { confirmInput, containerInput, fingerprintInput, nameInput, workspaceInput } from "./inputs";
-import { summarizeWorkspaceStatus, versionCounts, WORKSPACE_NOT_LIVE_NOTE } from "./summaries";
+import { resolveConflictsIn, summarizeWorkspaceStatus, versionCounts, WORKSPACE_NOT_LIVE_NOTE } from "./summaries";
 import { isEmptyPatch, okWrite } from "./write";
 
 const workspaces = accounts.containers.workspaces;
@@ -20,10 +20,13 @@ function workspaceSummary(w: Workspace) {
 }
 
 /** Why a quick preview did not compile, or undefined when it did (the Q20 shapes). */
-export function quickPreviewProblem(response: QuickPreviewResponse | undefined): string | undefined {
+export function quickPreviewProblem(
+	response: QuickPreviewResponse | undefined,
+	resolveIn = resolveConflictsIn(undefined, false),
+): string | undefined {
 	if (response?.compilerError) return "The workspace does not compile. Fix the errors shown in GTM, then retry.";
 	if (response?.syncStatus?.mergeConflict) {
-		return "The workspace has merge conflicts with the latest version. Resolve them in GTM, then retry.";
+		return `The workspace has merge conflicts with the latest version. Resolve them ${resolveIn}, then retry.`;
 	}
 	if (response?.syncStatus?.syncError) return "GTM could not sync the workspace with the latest version. Retry.";
 	if (!response?.containerVersion) return "GTM returned no preview for this workspace.";
@@ -100,7 +103,13 @@ export const workspaceTools: ToolGroup = (tools) => {
 			input: workspaceInput,
 			annotations: { readOnlyHint: true },
 		},
-		async (ids, { gtm }) => ok(summarizeWorkspaceStatus(await workspaces.getStatus(gtm, { path: workspacePath(ids) }))),
+		async (ids, { gtm, env }) =>
+			ok(
+				summarizeWorkspaceStatus(
+					await workspaces.getStatus(gtm, { path: workspacePath(ids) }),
+					resolveConflictsIn(env.GTM_TOOL_GROUPS, true),
+				),
+			),
 	);
 
 	tools.add(
@@ -132,9 +141,9 @@ export const workspaceTools: ToolGroup = (tools) => {
 			// A POST that builds a preview on Google's side: not a read, though nothing is saved.
 			annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 		},
-		async (ids, { gtm }) => {
+		async (ids, { gtm, env }) => {
 			const response = await workspaces.quickPreview(gtm, { path: workspacePath(ids) });
-			const problem = quickPreviewProblem(response);
+			const problem = quickPreviewProblem(response, resolveConflictsIn(env.GTM_TOOL_GROUPS, false));
 			if (problem) return fail(problem);
 			return ok({
 				compiles: true,

@@ -115,29 +115,39 @@ describe("update_container", () => {
 	});
 });
 
+/** Q35: combine_containers and move_tag_id work only on Google tag containers. */
+const googleTag: Container = {
+	...container,
+	name: "GA4 tag",
+	publicId: "GT-ABC1234",
+	tagIds: ["GT-ABC1234", "G-XYZ987"],
+};
+
 describe("combine_containers", () => {
 	const OTHER = `${ACCOUNT}/containers/202`;
 	const ARGS = { ...CONTAINER_ARGS, sourceContainerId: "202", settingSource: "current" };
+	const other = { containerId: "202", name: "Old tag", publicId: "GT-OLD1234", tagIds: ["G-OLD1234"] };
 
 	it.each([{}, { confirm: false }])("without confirm: true (%o) reads both containers and previews", async (extra) => {
-		const mock = mockGtm({
-			[CONTAINER]: reply(container),
-			[OTHER]: reply({ containerId: "202", name: "Old site", publicId: "GTM-OLD1234", tagIds: ["GTM-OLD1234"] }),
-		});
+		const mock = mockGtm({ [CONTAINER]: reply(googleTag), [OTHER]: reply(other) });
 		const result = await callTool("combine_containers", { ...ARGS, ...extra });
 		expect(writes(mock.gtm())).toHaveLength(0);
 		expect(result.json()).toMatchObject({
 			preview: true,
-			into: { containerId: "201", publicId: "GTM-ABC1234" },
-			wouldMerge: { containerId: "202", publicId: "GTM-OLD1234" },
+			into: { containerId: "201", publicId: "GT-ABC1234" },
+			wouldMerge: { containerId: "202", publicId: "GT-OLD1234" },
 			keepSettingsOf: "current",
 		});
 	});
 
-	it("with confirm: true POSTs {container}:combine with containerId and settingSource only", async () => {
-		const mock = mockGtm({ [`${CONTAINER}:combine`]: byMethod({ POST: reply(container) }) });
+	it("with confirm: true reads both containers, then POSTs {container}:combine with containerId and settingSource only", async () => {
+		const mock = mockGtm({
+			[CONTAINER]: byMethod({ GET: reply(googleTag) }),
+			[OTHER]: reply(other),
+			[`${CONTAINER}:combine`]: byMethod({ POST: reply(googleTag) }),
+		});
 		const result = await callTool("combine_containers", { ...ARGS, confirm: true });
-		expect(mock.gtm().map(describeCall)).toMatchObject([
+		expect(writes(mock.gtm()).map(describeCall)).toMatchObject([
 			{
 				method: "POST",
 				path: `${CONTAINER}:combine`,
@@ -147,6 +157,19 @@ describe("combine_containers", () => {
 		]);
 		expect(result.json()).toMatchObject({ combined: { containerId: "201" } });
 	});
+
+	it.each([{}, { confirm: true }])(
+		"Q35 refuses a GTM-… container with a clear message, writing nothing (%o)",
+		async (extra) => {
+			const mock = mockGtm({ [CONTAINER]: reply(container), [OTHER]: reply(other) });
+			const result = await callTool("combine_containers", { ...ARGS, ...extra });
+			expect(result).toMatchObject({
+				isError: true,
+				text: expect.stringContaining("combine_containers works only on Google tag containers"),
+			});
+			expect(writes(mock.gtm())).toHaveLength(0);
+		},
+	);
 
 	it("refuses combining a container with itself, and a bad settingSource, before calling Google", async () => {
 		const mock = mockGtm();
@@ -164,7 +187,7 @@ describe("move_tag_id", () => {
 	const ARGS = { ...CONTAINER_ARGS, tagId: "g-xyz987", tagName: "GA4 property" };
 
 	it("without confirm: true checks the tag ID belongs to the container and previews", async () => {
-		const mock = mockGtm({ [CONTAINER]: reply(container) });
+		const mock = mockGtm({ [CONTAINER]: reply(googleTag) });
 		const result = await callTool("move_tag_id", ARGS);
 		expect(writes(mock.gtm())).toHaveLength(0);
 		expect(result.json()).toMatchObject({
@@ -176,39 +199,54 @@ describe("move_tag_id", () => {
 		expect(result.json<{ message: string }>().message).toContain("acceptTerms: true");
 	});
 
+	it.each([{}, { confirm: true, acceptTerms: true }])(
+		"Q35 refuses a GTM-… container before anything is moved (%o)",
+		async (extra) => {
+			const mock = mockGtm({ [CONTAINER]: reply(container) });
+			const result = await callTool("move_tag_id", { ...ARGS, ...extra });
+			expect(result).toMatchObject({
+				isError: true,
+				text: expect.stringContaining("move_tag_id works only on Google tag containers"),
+			});
+			expect(writes(mock.gtm())).toHaveLength(0);
+		},
+	);
+
 	it("refuses a tag ID the container doesn't have", async () => {
-		mockGtm({ [CONTAINER]: reply(container) });
+		mockGtm({ [CONTAINER]: reply(googleTag) });
 		const result = await callTool("move_tag_id", { ...ARGS, tagId: "G-OTHER1" });
 		expect(result.isError).toBe(true);
 		expect(result.text).toContain("is not one of container 201's tag IDs");
 	});
 
 	it("with confirm: true but no acceptTerms, moves nothing", async () => {
-		const mock = mockGtm();
+		const mock = mockGtm({ [CONTAINER]: reply(googleTag) });
 		const result = await callTool("move_tag_id", { ...ARGS, confirm: true });
 		expect(result.isError).toBe(true);
 		expect(result.text).toContain("acceptTerms must be true");
-		expect(mock.calls).toHaveLength(0);
+		expect(writes(mock.gtm())).toHaveLength(0);
 	});
 
 	it("with confirm and acceptTerms POSTs {container}:move_tag_id, never copying users", async () => {
-		const mock = mockGtm({ [`${CONTAINER}:move_tag_id`]: byMethod({ POST: reply(container) }) });
+		const mock = mockGtm({
+			[CONTAINER]: byMethod({ GET: reply(googleTag) }),
+			[`${CONTAINER}:move_tag_id`]: byMethod({ POST: reply(googleTag) }),
+		});
 		await callTool("move_tag_id", { ...ARGS, copySettings: true, acceptTerms: true, confirm: true });
-		expect(mock.gtm().map(describeCall)).toMatchObject([
-			{
-				method: "POST",
-				path: `${CONTAINER}:move_tag_id`,
-				query: {
-					tagId: "G-XYZ987",
-					tagName: "GA4 property",
-					copySettings: "true",
-					copyTermsOfService: "true",
-					copyUsers: "false",
-				},
-				body: undefined,
+		const [post] = writes(mock.gtm());
+		expect(describeCall(post)).toMatchObject({
+			method: "POST",
+			path: `${CONTAINER}:move_tag_id`,
+			query: {
+				tagId: "G-XYZ987",
+				tagName: "GA4 property",
+				copySettings: "true",
+				copyTermsOfService: "true",
+				copyUsers: "false",
 			},
-		]);
-		expect(describeCall(mock.gtm()[0]).query).not.toHaveProperty("allowUserPermissionFeatureUpdate");
+			body: undefined,
+		});
+		expect(describeCall(post).query).not.toHaveProperty("allowUserPermissionFeatureUpdate");
 	});
 
 	it("refuses a malformed tag ID before calling Google", async () => {

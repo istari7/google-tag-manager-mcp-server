@@ -208,9 +208,17 @@ describe("create_version", () => {
 		const result = await callTool("create_version", ARGS);
 		expect(result.isError).toBe(true);
 		expect(result.text).toBe(
-			'Workspace 7 has 1 merge conflict(s) (trigger 34 "Link - Outbound"). Resolve them in the GTM UI, then retry. No version was created.',
+			'Workspace 7 has 1 merge conflict(s) (trigger 34 "Link - Outbound"). Resolve them with resolve_workspace_conflict (one call per entity) or in the GTM UI, then retry. No version was created.',
 		);
 		expect(writes(mock.gtm())).toHaveLength(0);
+	});
+
+	it("a Google-side merge conflict points at sync_workspace, then resolve_workspace_conflict (workspace-admin on)", async () => {
+		mockGtm({ [STATUS]: reply(pending), [CREATE]: reply({ syncStatus: { mergeConflict: true } }) });
+		const result = await callTool("create_version", ARGS);
+		expect(result.text).toContain(
+			"with sync_workspace (it lists them with fingerprints), then resolve_workspace_conflict",
+		);
 	});
 
 	it.each([

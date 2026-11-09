@@ -9,7 +9,7 @@ import type { ToolGroup } from "../mcp/registry";
 import { fail, ok, okList } from "../mcp/result";
 import { confirmGate, okPreview } from "./confirm";
 import { confirmInput, containerInput, gtmId, nameInput, workspaceInput } from "./inputs";
-import { count, describeEntity, summarizeVersion, versionHeadline } from "./summaries";
+import { count, describeEntity, resolveConflictsIn, summarizeVersion, versionHeadline } from "./summaries";
 import { okWrite } from "./write";
 
 const versions = accounts.containers.versions;
@@ -56,7 +56,7 @@ export const versionTools: ToolGroup = (tools) => {
 			}),
 			annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 		},
-		async ({ name, notes, ...ids }, { gtm }): Promise<CallToolResult> => {
+		async ({ name, notes, ...ids }, { gtm, env }): Promise<CallToolResult> => {
 			const path = workspacePath(ids);
 			// Check the workspace first, so we never version nothing or a conflicted workspace.
 			const status = await workspaces.getStatus(gtm, { path });
@@ -64,7 +64,7 @@ export const versionTools: ToolGroup = (tools) => {
 			if (conflicts.length > 0) {
 				const which = conflicts.map((c) => entityLabel(describeEntity(c.entityInWorkspace ?? c.entityInBaseVersion)));
 				return fail(
-					`Workspace ${ids.workspaceId} has ${conflicts.length} merge conflict(s) (${which.join(", ")}). Resolve them in the GTM UI, then retry. No version was created.`,
+					`Workspace ${ids.workspaceId} has ${conflicts.length} merge conflict(s) (${which.join(", ")}). Resolve them ${resolveConflictsIn(env.GTM_TOOL_GROUPS, true)}, then retry. No version was created.`,
 				);
 			}
 			if ((status?.workspaceChange ?? []).length === 0) {
@@ -72,7 +72,7 @@ export const versionTools: ToolGroup = (tools) => {
 			}
 
 			const response = await workspaces.createVersion(gtm, { path }, { name, notes });
-			const problem = createVersionProblem(response); // Q20
+			const problem = createVersionProblem(response, resolveConflictsIn(env.GTM_TOOL_GROUPS, false)); // Q20
 			if (problem || !response.containerVersion) return fail(problem ?? "No version was created.");
 
 			const version = versionHeadline(response.containerVersion);

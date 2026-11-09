@@ -84,7 +84,7 @@ that this table lists every tool, in its group.
 | | `list_containers` | Lists the containers in an account | read |
 | | `lookup_container` | Finds a container by its public ID (`GTM-XXXXXXX`); an error if there is none | read |
 | | `get_container_snippet` | Returns the container's install code: the `<head>` script and the `<noscript>` body part | read |
-| | `delete_container` | Deletes a container for good; needs `confirm: true` and its public ID typed by you: in a form your client shows (MCP elicitation), or in chat when the client can't | destructive |
+| | `delete_container` | Deletes a container for good; needs `confirm: true` and its public ID typed by you: in a form your client shows (MCP elicitation), or in chat when the client can't. If the client cancels the form (some can't show it, e.g. in a subagent), nothing is deleted: run it where the form shows, or use the GTM UI | destructive |
 | `workspaces` | `list_workspaces` | Lists a container's workspaces | read |
 | | `get_workspace` | Gets a workspace's name, description and fingerprint | read |
 | | `create_workspace` | Creates a workspace (containers allow only a few); it starts from the latest saved version, which may not be the live one | write |
@@ -115,9 +115,9 @@ that this table lists every tool, in its group.
 | `guidance` | `get_tag_templates`, `get_trigger_templates` | Example `create_tag` / `create_trigger` arguments for common tag and trigger types (no API call) | read |
 | `templates` (optional) | `list_templates` | Lists custom templates with the `cvt_…` type their tags or variables use (no template code) | read |
 | | `get_template` | Gets one template with its `.tpl` code (optionally without it) | read |
-| | `create_template`, `update_template` | Creates a template from `.tpl` code / changes its name or code (other fields are kept) | write |
+| | `create_template`, `update_template` | Creates a template from `.tpl` code / replaces its code (GTM names a template after the code's `___INFO___` `displayName`, so that is how to rename it) | write |
 | | `import_gallery_template` | Imports a Community Template Gallery template by GitHub owner and repository, accepting its declared permissions; the preview names the template (the API can't show its permissions before import) | destructive |
-| | `delete_template` | Deletes a template; the preview lists the tags and variables that use it | destructive |
+| | `delete_template` | Deletes a template; the preview lists the tags and variables that use it, and GTM's bare refusal while they exist is explained | destructive |
 | `zones` (optional, GTM 360) | `list_zones`, `get_zone` | Lists zones / gets one zone in full | read |
 | | `create_zone`, `update_zone` | Creates a zone / changes some fields of a zone (boundary conditions as a JSON string) | write |
 | | `delete_zone` | Deletes a zone; the preview shows the zone | destructive |
@@ -129,13 +129,13 @@ that this table lists every tool, in its group.
 | | `delete_transformation` | Deletes a transformation; the preview shows the transformation | destructive |
 | `environments` (optional) | `list_environments`, `get_environment` | Lists a container's environments / gets one with its authorization code | read |
 | | `create_environment` | Creates a user environment (e.g. staging); applies immediately | admin |
-| | `update_environment` | Changes an environment; repointing it to another version or workspace needs `confirm: true` | destructive |
+| | `update_environment` | Changes an environment (name, description and target only on user environments); repointing it to another version or workspace needs `confirm: true` | destructive |
 | | `reauthorize_environment` | Issues a new authorization code; the old one stops working | destructive |
 | | `delete_environment` | Deletes a user environment; pages using its snippet stop loading it | destructive |
 | `destinations` (optional) | `list_destinations`, `get_destination` | Lists the Google tag destinations linked to a container / gets one | read |
 | | `link_destination` | Links a destination to this container, moving it from its current one | destructive |
-| `gtag` (optional) | `list_google_tag_configs`, `get_google_tag_config` | Lists the Google tag configs GTM creates with GA4, Ads and Floodlight tags (type and tag ID) / gets one in full | read |
-| | `create_google_tag_config`, `update_google_tag_config` | Creates a Google tag config / changes its type or parameters | write |
+| `gtag` (optional) | `list_google_tag_configs`, `get_google_tag_config` | Lists the Google tag configs GTM creates with GA4, Ads and Floodlight tags (type, and tag ID when the config has one) / gets one in full | read |
+| | `create_google_tag_config`, `update_google_tag_config` | Creates a Google tag config (one per type, e.g. `ogt_auto_events`; refused, naming the existing one, if that type exists) / changes its type or parameters | write |
 | | `delete_google_tag_config` | Deletes a Google tag config, e.g. one left behind after its tag was deleted | destructive |
 | `users` (optional) | `list_user_permissions` | Lists who can access an account and its containers | read |
 | | `set_user_permission` | Adds a user or changes their account / container access; the preview shows before and after | destructive |
@@ -143,8 +143,8 @@ that this table lists every tool, in its group.
 | `container-admin` (optional) | `get_container` | Gets a container's settings, tag IDs, features and fingerprint | read |
 | | `create_container` | Creates a container (web, android, ios, amp or server) | admin |
 | | `update_container` | Changes a container's name, domains, notes or server URLs (other fields are kept) | admin |
-| | `combine_containers` | Merges another container of the account into this one; the preview shows both | destructive |
-| | `move_tag_id` | Moves a tag ID out into a new container; confirming also needs `acceptTerms: true` | destructive |
+| | `combine_containers` | Google tag containers only (refused on `GTM-…` ones): merges another container of the account into this one; the preview shows both | destructive |
+| | `move_tag_id` | Google tag containers only (refused on `GTM-…` ones): moves a tag ID out into a new container; confirming also needs `acceptTerms: true` | destructive |
 | `folder-admin` (optional) | `get_folder` | Gets a folder with its fingerprint | read |
 | | `create_folder` | Creates a folder | write |
 | | `update_folder` | Renames a folder or changes its notes (other fields are kept) | write |
@@ -152,12 +152,12 @@ that this table lists every tool, in its group.
 | | `delete_folder` | Deletes a folder; the preview lists what is in it, which is kept, and the result says what was moved out | destructive |
 | `workspace-admin` (optional) | `sync_workspace` | Brings a workspace's unchanged entities up to the latest version; clashes become merge conflicts; needs `confirm: true` | write |
 | | `resolve_workspace_conflict` | Replaces a conflicting tag, trigger, variable or folder with the resolved one; the preview shows both sides | destructive |
-| | `bulk_update_workspace` | Adds, updates and deletes several tags, triggers, variables and folders in one call (new IDs `new_1`, `new_2`, …) | destructive |
+| | `bulk_update_workspace` | Adds, updates and deletes several tags, triggers, variables and folders in one call (new IDs `new_1`, `new_2`, …; a deleted one needs only its ID, the rest is read for it) | destructive |
 | `version-admin` (optional) | `update_version` | Renames a version or changes its description | write |
-| | `delete_version` | Deletes (archives) a version other than the live one; `undelete_version` restores it | destructive |
-| | `undelete_version` | Restores a deleted version; needs `confirm: true` | write |
-| | `set_latest_version` | Makes a version the latest (the base for new workspaces and syncs); does not publish; needs `confirm: true` | write |
-| `reverts` (optional) | `revert_workspace_entity` | Discards a workspace's changes to one tag, trigger, variable, folder, zone, template, client, transformation or built-in variable; the preview shows what is undone | destructive |
+| | `delete_version` | Deletes (archives) a version other than the live or latest one (GTM also refuses one a workspace is still based on); `undelete_version` restores it | destructive |
+| | `undelete_version` | Restores a deleted version (the preview reads it from the version list, since GTM hides deleted versions); needs `confirm: true` | write |
+| | `set_latest_version` | Makes a version the latest (the base for new workspaces and syncs) by saving a copy of it as a new version, which the result names; does not publish; needs `confirm: true` | write |
+| `reverts` (optional) | `revert_workspace_entity` | Discards a workspace's changes to one tag, trigger, variable, folder, zone, template, client, transformation or built-in variable; the preview shows what is undone. Google ignores a fingerprint on revert, so a `fingerprint` passed is checked here, against a fresh read | destructive |
 
 The server also offers best-practice guides and skills as MCP resources and prompts; see
 [Skills and prompts](#skills-and-prompts).
@@ -207,13 +207,17 @@ These tools change your live site or remove work for good, so each one takes two
   2026-07-28 clients that declare it), the confirmed call makes the client ask you for the ID in a
   form the AI never fills in. Otherwise the AI must pass the ID you typed in chat; since
   `list_containers` and friends show public IDs, that check relies on the AI following the
-  instructions, so read what you are asked to confirm.
+  instructions, so read what you are asked to confirm. When a client declares elicitation but
+  cancels the form (seen with a Claude Code subagent, which can't show it), nothing is deleted
+  and the ID typed in chat is not accepted instead; delete from a conversation where the form
+  shows, or in the GTM UI.
 - **`import_gallery_template`** accepts every permission a Community Template Gallery template
   declares (scripts it may load, data it may send, cookies). It previews first and imports only
   with `confirm: true`; the API can't read a template before importing it, so check its
   permissions in its GitHub repository.
 - **`combine_containers`** and **`move_tag_id`** change which container a tag ID loads, at once.
-  Their previews show the containers involved; `move_tag_id` also needs `acceptTerms: true` for
+  They work only on Google tag containers (the ones a `G-…` or `AW-…` tag creates), not on
+  `GTM-…` containers, where GTM refuses them. Their previews show the containers involved; `move_tag_id` also needs `acceptTerms: true` for
   the terms of service copied to the new container, and never copies users.
 
 `publish_version`, `delete_workspace` and `delete_container` need the `tagmanager.publish` and
@@ -467,7 +471,7 @@ The Worker asks Google for `openid email profile` (to identify you) plus the sco
   create). Previews are reads: 1 call for a delete (`delete_trigger` also reads the tag and
   trigger lists, `delete_variable` the tag, trigger and variable lists, `delete_workspace` the
   workspace status), 2 for `publish_version` (the version and the live one). Creating a GA4,
-  Google Ads or Floodlight tag costs 2 more calls (the workspace status before and after). A confirmed `delete_container` costs 2 (it re-reads the public ID; 3 with elicitation, which reads it again when the client retries). Calls that read several lists at once (the reference checks of `delete_trigger`, `delete_variable` and `delete_template`, and a skill prompt's live data) read at most 24 pages in all, to stay under the Workers subrequest limit; on a bigger workspace they say the check or the data is partial. The server retries rate-limit errors with backoff.
+  Google Ads or Floodlight tag costs 2 more calls (the workspace status before and after). A confirmed `delete_container` costs 2 (it re-reads the public ID; 3 with elicitation, which reads it again when the client retries). Calls that read several lists at once (the reference checks of `delete_trigger`, `delete_variable` and `delete_template`, and a skill prompt's live data) read at most 24 pages in all, to stay under the Workers subrequest limit; on a bigger workspace they say the check or the data is partial. `create_google_tag_config` lists the workspace's configs first (GTM allows one per type), `bulk_update_workspace` reads each deleted entity you pass by ID only (at most 24), and `delete_version` also reads the latest version header. The server retries rate-limit errors with backoff, except on `create_google_tag_config`, where Google's 429 usually means a config of that type already exists.
 
 ## The 7-day sign-in problem
 

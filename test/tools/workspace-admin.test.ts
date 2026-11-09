@@ -253,33 +253,63 @@ describe("bulk_update_workspace", () => {
 		{ changeStatus: "deleted", tag: { tagId: "12" } },
 	];
 
-	it("without confirm: true lists the changes and calls nothing", async () => {
-		const mock = mockGtm();
+	const TAG_12 = `${WORKSPACE}/tags/12`;
+	const tag12Route = { [TAG_12]: byMethod({ GET: reply(ga4EventTag) }) };
+
+	it("Q33 without confirm: true only GETs the bare deleted entity (for its name) and lists the changes", async () => {
+		const mock = mockGtm(tag12Route);
 		const result = await callTool("bulk_update_workspace", { ...WORKSPACE_ARGS, changes });
-		expect(mock.calls).toHaveLength(0);
+		expect(mock.gtm().map(describeCall)).toMatchObject([{ method: "GET", path: TAG_12 }]);
 		expect(result.json()).toMatchObject({
 			preview: true,
 			wouldApply: [
 				{ changeStatus: "added", kind: "folder", id: "new_1", name: "Checkout" },
 				{ changeStatus: "added", kind: "tag", id: "new_2", name: "HTML - x" },
 				{ changeStatus: "updated", kind: "trigger", id: "34", name: "Link - Outbound" },
-				{ changeStatus: "deleted", kind: "tag", id: "12" },
+				{ changeStatus: "deleted", kind: "tag", id: "12", name: "GA4 - Event - sign_up" },
 			],
 		});
 	});
 
-	it("with confirm: true POSTs {workspace}/bulk_update with the changes as given", async () => {
+	it("Q33 a deleted entry already carrying name and type is sent as given, with no GET", async () => {
+		const mock = mockGtm({ [BULK]: byMethod({ POST: reply({}) }) });
+		const deleted = { changeStatus: "deleted", variable: { variableId: "63", name: "DLV - x", type: "v" } };
+		await callTool("bulk_update_workspace", { ...WORKSPACE_ARGS, changes: [deleted], confirm: true });
+		expect(mock.gtm().map(describeCall)).toMatchObject([{ method: "POST", path: BULK, body: { changes: [deleted] } }]);
+	});
+
+	it("Q33 refuses more bare deleted entries than it may look up, before calling Google", async () => {
+		const mock = mockGtm();
+		const many = Array.from({ length: 25 }, (_, i) => ({ changeStatus: "deleted", tag: { tagId: String(100 + i) } }));
+		const result = await callTool("bulk_update_workspace", { ...WORKSPACE_ARGS, changes: many, confirm: true });
+		expect(result).toMatchObject({
+			isError: true,
+			text: expect.stringContaining("25 deleted entries have no name or type"),
+		});
+		expect(mock.calls).toHaveLength(0);
+	});
+
+	it("Q33 with confirm: true POSTs {workspace}/bulk_update with the changes, the deleted tag completed by a GET", async () => {
 		const mock = mockGtm({
+			...tag12Route,
 			[BULK]: byMethod({
 				POST: reply({ changes: [{ changeStatus: "added", folder: { folderId: "20", name: "Checkout" } }] }),
 			}),
 		});
 		const result = await callTool("bulk_update_workspace", { ...WORKSPACE_ARGS, changes, confirm: true });
-		// The changes as given, except the linkClick trigger, fixed as update_trigger would (Q3/Q4).
-		const sent = changes.map((c) => (c.trigger ? { ...c, trigger: normalizeTrigger(c.trigger).value } : c));
+		// The changes as given, except the linkClick trigger, fixed as update_trigger would (Q3/Q4),
+		// and the bare deleted tag, sent whole as GTM needs its name and type (Q33).
+		const sent = changes.map((c) =>
+			c.trigger
+				? { ...c, trigger: normalizeTrigger(c.trigger).value }
+				: c.changeStatus === "deleted"
+					? { ...c, tag: ga4EventTag }
+					: c,
+		);
 		expect(sent[2]?.trigger).toMatchObject({ waitForTags: { type: "boolean" }, filter: expect.any(Array) });
 		expect(sent[2]?.trigger).not.toHaveProperty("autoEventFilter");
 		expect(mock.gtm().map(describeCall)).toEqual([
+			expect.objectContaining({ method: "GET", path: TAG_12 }),
 			expect.objectContaining({ method: "POST", path: BULK, query: {}, body: { changes: sent } }),
 		]);
 		expect(result.json()).toEqual({
@@ -332,7 +362,7 @@ describe("bulk_update_workspace", () => {
 						],
 					},
 				},
-				{ changeStatus: "deleted", trigger: { triggerId: "40" } },
+				{ changeStatus: "deleted", trigger: { triggerId: "40", name: "Old", type: "click" } },
 			],
 		});
 		expect(mock.calls).toHaveLength(0);

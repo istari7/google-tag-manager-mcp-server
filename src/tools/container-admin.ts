@@ -47,6 +47,18 @@ function containerHeadline(c: Container) {
 	return { containerId: c.containerId, name: c.name, publicId: c.publicId, tagIds: c.tagIds };
 }
 
+/**
+ * A Tag Manager container (public ID GTM-…), as opposed to a Google tag container (G-…, GT-…,
+ * AW-…). combine_containers and move_tag_id work only on the latter (Q35).
+ */
+function isGtmContainer(c: Container): boolean {
+	return c.publicId?.toUpperCase().startsWith("GTM-") === true;
+}
+
+function notForGtmContainers(tool: string, c: Container): string {
+	return `Nothing was changed: ${tool} works only on Google tag containers (the ones a Google tag such as G-… or AW-… creates), and container ${c.containerId} is a Tag Manager container (GTM-…). GTM refuses it there. To move tags between GTM containers, export and import them in the GTM UI (Admin > Export / Import Container).`;
+}
+
 const settingsFields = {
 	domainName: z.array(z.string()).optional(),
 	notes: z.string().optional(),
@@ -122,7 +134,7 @@ export const containerAdminTools: ToolGroup = (tools) => {
 		"combine_containers",
 		{
 			description:
-				"Merge another container of this account into this one; its tag IDs move here. Hard to undo. Without confirm: true, only previews.",
+				"Google tag containers only (not GTM-…): merge another container of this account into this one; its tag IDs move here. Hard to undo. Without confirm: true, only previews.",
 			input: containerInput.extend({
 				sourceContainerId: gtmId("Container to merge in"),
 				settingSource: z.enum(["current", "other"]).describe("Whose settings to keep"),
@@ -133,18 +145,19 @@ export const containerAdminTools: ToolGroup = (tools) => {
 		async ({ sourceContainerId, settingSource, confirm, ...ids }, { gtm }) => {
 			if (sourceContainerId === ids.containerId) return fail("sourceContainerId must be a different container.");
 			const path = containerPath(ids);
+			const [target, source] = await Promise.all([
+				containers.get(gtm, { path }),
+				containers.get(gtm, { path: containerPath({ ...ids, containerId: sourceContainerId }) }),
+			]);
+			// Q35: on a GTM container Google fails with HTTP 500 and changes nothing.
+			if (isGtmContainer(target)) return fail(notForGtmContainers("combine_containers", target));
 			return confirmGate({
 				confirm,
-				preview: async () => {
-					const [target, source] = await Promise.all([
-						containers.get(gtm, { path }),
-						containers.get(gtm, { path: containerPath({ ...ids, containerId: sourceContainerId }) }),
-					]);
-					return okPreview(
+				preview: () =>
+					okPreview(
 						{ into: containerHeadline(target), wouldMerge: containerHeadline(source), keepSettingsOf: settingSource },
 						"Nothing was combined. Sites that load the merged container's tag IDs would get this container's tags. Get the user's explicit go-ahead, then call combine_containers again with confirm: true.",
-					);
-				},
+					),
 				apply: async () => {
 					// allowUserPermissionFeatureUpdate is never set: user permissions stay as they are.
 					const c = await containers.combine(gtm, { path, containerId: sourceContainerId, settingSource });
@@ -161,7 +174,7 @@ export const containerAdminTools: ToolGroup = (tools) => {
 		"move_tag_id",
 		{
 			description:
-				"Move a tag ID out of this container into a new one. Without confirm: true, only previews; confirming also needs acceptTerms: true.",
+				"Google tag containers only (not GTM-…): move a tag ID out of this container into a new one. Without confirm: true, only previews; confirming also needs acceptTerms: true.",
 			input: containerInput.extend({
 				tagId: z.string().trim().toUpperCase().regex(TAG_ID).describe("From get_container's tagIds"),
 				tagName: nameInput("New container"),
@@ -173,10 +186,12 @@ export const containerAdminTools: ToolGroup = (tools) => {
 		},
 		async ({ tagId, tagName, copySettings, acceptTerms, confirm, ...ids }, { gtm }) => {
 			const path = containerPath(ids);
+			const c = await containers.get(gtm, { path });
+			// Q35: Google refuses with "For Google tag only, this operation is not supported by GTM container."
+			if (isGtmContainer(c)) return fail(notForGtmContainers("move_tag_id", c));
 			return confirmGate({
 				confirm,
-				preview: async () => {
-					const c = await containers.get(gtm, { path });
+				preview: () => {
 					if (!c.tagIds?.includes(tagId)) {
 						return fail(
 							`${tagId} is not one of container ${ids.containerId}'s tag IDs (${(c.tagIds ?? []).join(", ") || "none"}).`,
@@ -196,7 +211,7 @@ export const containerAdminTools: ToolGroup = (tools) => {
 					if (acceptTerms !== true) {
 						return fail("Nothing was moved: acceptTerms must be true (the user accepts the copied terms of service).");
 					}
-					const c = await containers.moveTagId(gtm, {
+					const created = await containers.moveTagId(gtm, {
 						path,
 						tagId,
 						tagName,
@@ -206,7 +221,7 @@ export const containerAdminTools: ToolGroup = (tools) => {
 					});
 					return ok({
 						moved: tagId,
-						container: containerHeadline(c),
+						container: containerHeadline(created),
 						note: "The tag ID moved immediately. Check the new container with list_containers.",
 					});
 				},

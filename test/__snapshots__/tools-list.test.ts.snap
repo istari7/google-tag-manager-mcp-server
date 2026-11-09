@@ -1034,7 +1034,7 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "type",
       "parameter",
     ],
-    "description": "Create a Google tag config in a workspace. Not live until a version is published.",
+    "description": "Create a Google tag config in a workspace (one per type; refused if that type exists). Not live until a version is published.",
     "name": "create_google_tag_config",
     "required": [
       "accountId",
@@ -1380,17 +1380,17 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "containerId",
       "workspaceId",
       "templateId",
-      "name",
       "templateData",
       "fingerprint",
     ],
-    "description": "Change a template's name or code; omitted ones are kept. GTM shows displayName from the code's ___INFO___. Pass get_template's fingerprint.",
+    "description": "Replace a template's code (templateData). GTM names templates from the code's ___INFO___ displayName, so edit that to rename one. Pass get_template's fingerprint.",
     "name": "update_template",
     "required": [
       "accountId",
       "containerId",
       "workspaceId",
       "templateId",
+      "templateData",
     ],
   },
   {
@@ -1666,7 +1666,7 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "containerVersionId",
       "confirm",
     ],
-    "description": "Delete (archive) a saved version, not the live one; undelete_version restores it. Without confirm: true, only previews.",
+    "description": "Delete (archive) a saved version, not the live or latest one; undelete_version restores it. Without confirm: true, only previews.",
     "name": "delete_version",
     "required": [
       "accountId",
@@ -1706,7 +1706,7 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "containerVersionId",
       "confirm",
     ],
-    "description": "Make a saved version the latest: new workspaces and syncs start from it. Does not publish. Without confirm: true, only previews.",
+    "description": "Make a saved version the latest: GTM saves a copy of it as a new version, which new workspaces and syncs start from. Does not publish. Without confirm: true, only previews.",
     "name": "set_latest_version",
     "required": [
       "accountId",
@@ -1811,7 +1811,7 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "settingSource",
       "confirm",
     ],
-    "description": "Merge another container of this account into this one; its tag IDs move here. Hard to undo. Without confirm: true, only previews.",
+    "description": "Google tag containers only (not GTM-…): merge another container of this account into this one; its tag IDs move here. Hard to undo. Without confirm: true, only previews.",
     "name": "combine_containers",
     "required": [
       "accountId",
@@ -1835,7 +1835,7 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "acceptTerms",
       "confirm",
     ],
-    "description": "Move a tag ID out of this container into a new one. Without confirm: true, only previews; confirming also needs acceptTerms: true.",
+    "description": "Google tag containers only (not GTM-…): move a tag ID out of this container into a new one. Without confirm: true, only previews; confirming also needs acceptTerms: true.",
     "name": "move_tag_id",
     "required": [
       "accountId",

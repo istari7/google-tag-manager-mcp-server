@@ -183,6 +183,54 @@ describe("update_environment", () => {
 		});
 	});
 
+	// Live: Google sends no `type` on user environments (get/list), only on Live/Latest/workspace.
+	const { type: _type, ...untyped } = staging;
+
+	it("Q29 an environment without type is a user one: rename, describe and repoint all go through", async () => {
+		const mock = mockGtm(routes(untyped));
+		const result = await callTool("update_environment", {
+			...ENV_ARGS,
+			name: "Staging 2",
+			description: "temp env (updated)",
+			fingerprint: STORED_FINGERPRINT,
+		});
+		expect(result.isError).toBe(false);
+		const { fingerprint: _fp, ...untypedBody } = untyped;
+		expect(describeCall(mock.gtm()[1])).toMatchObject({
+			method: "PUT",
+			query: { fingerprint: STORED_FINGERPRINT },
+			body: { ...untypedBody, name: "Staging 2", description: "temp env (updated)" },
+		});
+		expect(result.text).not.toContain("undefined");
+	});
+
+	it("Q29 repointing an environment without type previews it as a user environment", async () => {
+		const mock = mockGtm(routes(untyped));
+		const result = await callTool("update_environment", { ...ENV_ARGS, containerVersionId: "41" });
+		expect(writes(mock.gtm())).toHaveLength(0);
+		expect(result.json()).toMatchObject({
+			preview: true,
+			environment: STAGING_ROW,
+			wouldServe: { containerVersionId: "41" },
+		});
+	});
+
+	it("Q29 list_environments shows type user when Google leaves it out", async () => {
+		mockGtm({ [`${CONTAINER}/environments`]: pages("environment", [[untyped]]) });
+		const result = await callTool("list_environments", CONTAINER_ARGS);
+		expect(result.json()).toEqual({ environments: [STAGING_ROW] });
+	});
+
+	it("refuses user-only fields on a workspace environment, naming its type", async () => {
+		const mock = mockGtm(routes({ ...live, type: "workspace" }));
+		const result = await callTool("update_environment", { ...ENV_ARGS, description: "x" });
+		expect(result).toMatchObject({
+			isError: true,
+			text: 'Nothing was changed: on a "workspace" environment Google only allows url and enableDebug to change, not description.',
+		});
+		expect(writes(mock.gtm())).toHaveLength(0);
+	});
+
 	it("Q2: a stale fingerprint fails with a conflict and sends no PUT", async () => {
 		const mock = mockGtm(routes());
 		const result = await callTool("update_environment", { ...ENV_ARGS, url: "", fingerprint: "0" });

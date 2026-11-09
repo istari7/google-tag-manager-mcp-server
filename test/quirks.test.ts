@@ -629,7 +629,7 @@ describe("Q20 create_version can succeed without a version", () => {
 		expect(createVersionProblem({})).toMatch(/no changes/);
 		expect(createVersionProblem(undefined)).toMatch(/no changes/);
 		expect(createVersionProblem({ compilerError: true })).toMatch(/compile/);
-		expect(createVersionProblem({ syncStatus: { mergeConflict: true } })).toMatch(/merge conflicts/);
+		expect(createVersionProblem({ syncStatus: { mergeConflict: true } })).toMatch(/merge conflicts.*in the GTM UI/);
 		expect(createVersionProblem({ syncStatus: { syncError: true } })).toMatch(/sync/);
 	});
 

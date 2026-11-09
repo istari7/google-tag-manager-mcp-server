@@ -37,7 +37,8 @@ Add an entry whenever manual testing turns up something new, with a test.
 ### Q2. The fingerprint is a query parameter, not a body field
 
 - **Google:** optimistic concurrency uses `?fingerprint=` on `update`,
-  `revert` and `resolve_conflict`. A mismatch returns 409 or 412.
+  `revert` and `resolve_conflict`. A mismatch returns 409 or 412, except on
+  `revert`, where Google ignores it (Q32).
 - **We:** `prepareUpdate` takes the fingerprint from the GET and sends it as
   the query parameter, and removes `fingerprint` from the body (including one
   the caller put in the patch). Get-merge-put alone only protects the gap
@@ -287,7 +288,8 @@ Add an entry whenever manual testing turns up something new, with a test.
   request was not processed and can be sent again after a pause. A plain
   403 is a real permission error, and a daily-quota 403
   (`dailyLimitExceeded`) won't clear within seconds.
-- **We:** retry 429 and rate-limit 403s for every method. Retry 5xx **only
+- **We:** retry 429 and rate-limit 403s for every method, except the one
+  call whose 429 is not a rate limit: `create_google_tag_config` (Q31). Retry 5xx **only
   for GET**. Backoff is 1 s, 2 s, 4 s, with at most 3 retries. We never retry
   400/401/404/409/412, a plain permission 403, or a daily-quota 403.
 - **Why writes are not retried on 5xx:** Google can fail after committing.
@@ -447,10 +449,10 @@ Add an entry whenever manual testing turns up something new, with a test.
   `variables.delete` on a variable a tag refers to as `{{Name}}` in a
   parameter, fail with the same bare 400 as Q25 ("Returned an error response
   for your request"), which doesn't say why. Once the tag is gone, the same
-  call succeeds (both confirmed live, 2026-11-09). We assume the same for a
-  trigger used as a blocking trigger or in a trigger group, and for a
-  variable used in a trigger condition or another variable (not verified
-  live).
+  call succeeds (both confirmed live, 2026-11-09). The same holds for a
+  trigger used only in a trigger group and a variable used only in a trigger
+  condition (also confirmed live); we assume it for a blocking trigger and a
+  variable used in another variable (not verified).
 - **We:** the `delete_trigger` preview lists the tags that fire on or are
   blocked by the trigger and the trigger groups that list it
   (`triggerReference`); the `delete_variable` preview lists the tags,
@@ -487,8 +489,10 @@ Add an entry whenever manual testing turns up something new, with a test.
   the form `cvt_…`, but `CustomTemplate` has no field for it. Paolo's server
   derives `cvt_<containerId>_<templateId>` for templates made in the
   container and `cvt_<galleryTemplateId>` for Community Template Gallery
-  imports (he changed the gallery rule after using it; we have not checked
-  either form live).
+  imports (he changed the gallery rule after using it). Both forms confirmed
+  live (2026-11-09): a gallery import got `cvt_K8GSG`, a container template
+  `cvt_285882497_96`, and a made-up `cvt_ZZZZZ` was refused ("Unknown entity
+  type"), so GTM does check the type.
 - **We:** `templateType` (`src/tools/templates.ts`) applies the same rule
   (container ID from `containerId`, else from `path`), and every template
   result carries it as `type`, next to `for` (tag, variable or client, read
@@ -496,3 +500,178 @@ Add an entry whenever manual testing turns up something new, with a test.
   the tags and variables with that type in its preview.
 - **Tests:** tools/templates: `templateType: cvt_<containerId>_<templateId>, or cvt_<galleryTemplateId> for gallery imports`,
   `without confirm: true previews, listing the tags and variables of the template's type`.
+
+## From the full live test (2026-11-09)
+
+Every tool was called against a real web container on a standard (non-360) account. These
+entries are what that run showed.
+
+### Q29. User environments have no `type`
+
+- **Google:** `environments.get` and `environments.list` leave `type` out of
+  user environments; only Live, Latest and workspace environments carry it
+  (`live`, `latest`, `workspace`). Seen on an environment made with
+  `create_environment`, which sends `type: "user"`.
+- **We:** `environmentType` (`src/tools/environments.ts`) reads a missing
+  type as `user`. `update_environment` restricts name, description and the
+  served version/workspace only on environments whose type is set and isn't
+  `user`, and its refusal names that type. `list_environments` shows
+  `type: "user"` for them.
+- **Tests:** tools/environments: `Q29 an environment without type is a user one…`,
+  `Q29 repointing an environment without type previews it…`,
+  `Q29 list_environments shows type user…`,
+  `refuses user-only fields on a workspace environment, naming its type`.
+
+### Q30. A deleted version can't be read
+
+- **Google:** `versions.get` on a deleted (archived) version answers 404 "Not
+  found or permission denied", although `versions.undelete` on the same path
+  works. `version_headers.list` with `includeDeleted=true` still lists it,
+  with `deleted: true`.
+- **We:** the `undelete_version` preview reads the version's header from
+  `version_headers.list?includeDeleted=true` (every page) instead of
+  `versions.get`, and says so when no version, deleted or not, has that ID.
+  The confirmed call POSTs `:undelete` as before.
+- **Tests:** tools/version-admin: `Q30 without confirm: true previews from the version list with includeDeleted…`,
+  `Q30 refuses to preview a version that is not deleted`,
+  `Q30 says so when no such version exists, deleted or not`.
+
+### Q31. One Google tag config per type: a second create is a 429; `googtag` is not a config type
+
+- **Google:** `gtag_config.create` with the type of a config the workspace
+  already has (seen with `ogt_auto_events`) answers HTTP 429, every time
+  (5 tries over ~15 minutes, while other writes went through). Once the
+  existing config was deleted, the same create succeeded at once. The config
+  types seen are `ogt_auto_events` and `ogt_1p_data_v2` (Q23);
+  `type: "googtag"` (a *tag* type) failed with HTTP 500 "Experienced an
+  internal error" and created nothing.
+- **We:** `create_google_tag_config` lists the workspace's configs first and
+  refuses a type that exists, naming the config ID and pointing at
+  `update_google_tag_config` / `delete_google_tag_config`. The POST is sent
+  once (`withoutRetries` in `src/gtm/client.ts` skips Q16's 429 retry, which
+  never clears here); after a 429 the tool lists again and gives the same
+  answer if a config of the type is there by then, else reports the rate
+  limit. Any 429 now shows Google's text when it says more than "rate limit"
+  (Q17). The `type` description names the real config types and warns off
+  `googtag`.
+- **Tests:** tools/gtag-configs: `Q31 lists the configs, then POSTs…`,
+  `Q31 refuses a second config of a type…`, `Q31 a 429 on the POST is not retried…`,
+  `Q31 a 429 with no config of the type behind it is reported as a rate limit…`,
+  `Q31 the type description names real config types…`;
+  client: `Q31 withoutRetries sends a 429 once`, `Q31 a 429 shows Google's text…`.
+
+### Q32. `?fingerprint=` is ignored on `:revert`
+
+- **Google:** `variables.revert` with a made-up `?fingerprint=1111111111111`
+  succeeded, so Google doesn't check the fingerprint on revert, despite Q2
+  and the Discovery document.
+- **We:** `revert_workspace_entity` keeps its `fingerprint` argument and
+  checks it itself: when one is passed, it GETs the entity just before the
+  revert and fails with the usual conflict (Q2) if the fingerprint differs.
+  That catches changes made since the caller's read, but not ones in the
+  moment between our GET and the POST. If the entity can't be read (deleted
+  in the workspace), the tool says to call again without a fingerprint.
+  Built-in variables have no fingerprint, so one passed with them is refused.
+  The fingerprint is still sent to Google, in case it starts checking.
+- **Tests:** tools/reverts: `Q32 %s: GETs it to check the fingerprint, then POSTs…`,
+  `Q32 a stale fingerprint is refused before the revert…`,
+  `Q32 without a fingerprint, reverts with no GET`,
+  `Q32 a fingerprint for an entity that can't be read…`,
+  `Q32 refuses a fingerprint on a built-in variable…`.
+
+### Q33. `bulk_update` needs a deleted entity's name and type
+
+- **Google:** in `workspaces.bulk_update`, a change `{changeStatus:
+  "deleted", trigger: {triggerId: "93"}}` is rejected with `trigger.name: The
+  name length must be between 1 and 255 characters.`, and nothing in the
+  call is applied. With the name and type, deletes work.
+- **We:** `bulk_update_workspace` still accepts a deleted entity by ID only.
+  For each deleted tag, trigger, variable or folder that lacks its name (or
+  type, except folders), it GETs the stored entity and sends that, with the
+  caller's fields on top. That is 1 GET each, before the preview too (so the
+  preview shows names), capped at 24 (`LIST_PAGE_BUDGET`, the Workers
+  subrequest budget); with more, it asks for the entities whole.
+- **Tests:** tools/workspace-admin: `Q33 without confirm: true only GETs the bare deleted entity…`,
+  `Q33 with confirm: true POSTs … the deleted tag completed by a GET`,
+  `Q33 a deleted entry already carrying name and type is sent as given…`,
+  `Q33 refuses more bare deleted entries than it may look up…`.
+
+### Q34. More bare 400s: in-use template, non-empty added folder, latest or base version
+
+- **Google:** these fail with the same bare 400 as Q25/Q26 ("Returned an
+  error response for your request"): `templates.delete` while a tag still
+  has the template's type; `folders.revert` on a folder added in the
+  workspace that still holds entities (the revert would delete it, as in
+  Q25); `versions.delete` on the latest version; and `versions.delete` on a
+  version a workspace is still based on (it worked once that workspace was
+  synced).
+- **We:** `delete_template` re-reads the template and the tags and variables
+  of its type after a 400 and names them (its preview already did).
+  `revert_workspace_entity` with kind `folder` lists an added folder's
+  contents in the preview with a warning, and after a 400 names them and how
+  to move them out (`move_entities_to_folder` to folder `0`, Q19).
+  `delete_version` reads the latest version header along with the live
+  version and refuses the latest one before any write (preview and confirmed
+  call). No API call says which version a workspace is based on, so the
+  preview only warns about that case, and a 400 on the DELETE becomes an
+  error that says to sync those workspaces.
+- **Tests:** tools/templates: `Q34 a bare 400 on the confirmed DELETE becomes an error naming the tags…`;
+  tools/reverts: `Q34 previews an added folder that still holds entities…`,
+  `Q34 a bare 400 reverting an added folder becomes an error…`;
+  tools/version-admin: `Q34 refuses the latest version before any DELETE`,
+  `Q34 a bare 400 on the DELETE becomes an error about workspaces still based on the version`.
+
+### Q35. `combine` and `move_tag_id` are for Google tag containers only
+
+- **Google:** `containers.move_tag_id` on a GTM container fails with "tag_id:
+  For Google tag only, this operation is not supported by GTM container.",
+  and `containers.combine` of two GTM containers failed with HTTP 500
+  "Experienced an internal error" and changed nothing. Both are meant for
+  Google tag containers, the ones a Google tag (`G-…`, `AW-…`) creates,
+  whose public ID is not `GTM-…`.
+- **We:** both tools read the target container before the gate and refuse a
+  container whose public ID starts with `GTM-`, in the preview and the
+  confirmed call, saying what they are for and pointing GTM containers at
+  the GTM UI's export/import. Their descriptions start with "Google tag
+  containers only". Telling the two kinds apart by the `GTM-` prefix is our
+  inference from the error text: the API has no field that says so.
+- **Tests:** tools/container-admin: `Q35 refuses a GTM-… container with a clear message…`,
+  `Q35 refuses a GTM-… container before anything is moved`.
+
+### Q36. A template's name comes from its code; `name` on update is ignored
+
+- **Google:** `templates.update` accepts a `name` and answers 200, but the
+  template keeps the name from the `displayName` in the `___INFO___` section
+  of its `templateData`. Seen on a gallery import (name only) and on a
+  container template (name and templateData together).
+- **We:** `update_template` takes no `name` (input schema changed): it
+  replaces `templateData`, and its description says to rename a template by
+  editing `displayName` in the code. A call with only `name` fails validation
+  before any request.
+- **Tests:** tools/templates: `Q36 takes no name (GTM ignores it)…`,
+  `Q1/Q8: GET, then PUT of the whole template…`.
+
+### Q37. `set_latest_version` saves a copy; it does not re-point "latest"
+
+- **Google:** `versions.set_latest` on version 2 (with 3 the latest) did not
+  make version 2 the latest: GTM saved a copy of it as a new version 4 named
+  "Restored_2" (description "Restored from 2") and returned that. Version 2
+  itself is unchanged.
+- **We:** the preview says a copy will be saved. The result reports the
+  version Google returns, and when its ID differs from the one asked for,
+  the note names the new version and says the original is unchanged.
+- **Tests:** tools/version-admin: `Q37 reports the new version GTM saves as a copy…`.
+
+### Q38. Two 404s that aren't about the IDs: zones without GTM 360, unknown emails
+
+- **Google:** on a standard (non-360) account, `zones.list` returns an empty
+  list, while `zones.get` / `create` / `update` / `delete` answer 404 "Not
+  found or permission denied". `user_permissions.create` for an email with
+  no Google account answers 404 "User not found".
+- **We:** a 404 on a `zones` path keeps the usual "check the IDs" hint and
+  adds that zones exist only in GTM 360 accounts. A user-permission 404
+  whose Google message is "User not found" says the email has no Google
+  account instead of pointing at the account ID (`notFoundMessage` in
+  `src/gtm/errors.ts`).
+- **Tests:** client: `Q38 a zone 404 adds that zones need GTM 360…`,
+  `Q38 a user-permission 404 'User not found' says the email has no Google account…`.

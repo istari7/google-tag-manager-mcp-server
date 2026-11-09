@@ -14,12 +14,12 @@ import { accounts, type CustomTemplate } from "../gtm/generated";
 import { updateTemplate } from "../gtm/merge";
 import { templatePath, workspacePath } from "../gtm/paths";
 import type { ToolGroup } from "../mcp/registry";
-import { fail, okEntity } from "../mcp/result";
+import { okEntity } from "../mcp/result";
 import { confirmGate, okPreview } from "./confirm";
 import { addDeleteTool, addListTool, workspaceEntity } from "./entity";
 import { confirmInput, fingerprintInput, gtmId, nameInput, type WorkspaceInput, workspaceInput } from "./inputs";
 import { incompleteCheckNote, listTags, listVariables } from "./references";
-import { isEmptyPatch, okWrite } from "./write";
+import { okWrite } from "./write";
 
 const ws = accounts.containers.workspaces;
 const templates = ws.templates;
@@ -77,7 +77,14 @@ export function templateRow(t: CustomTemplate) {
  * Tags and variables whose type is this template's: what a delete would break. Both lists share
  * LIST_PAGE_BUDGET (Workers' subrequest cap); on a huge workspace the check is partial.
  */
-async function templateUsers(gtm: GtmClient, ids: WorkspaceInput, type: string | undefined) {
+type TemplateUsers = {
+	usedBy?: string[];
+	usedByNote?: string;
+	partial?: true;
+	partialNote?: string;
+};
+
+async function templateUsers(gtm: GtmClient, ids: WorkspaceInput, type: string | undefined): Promise<TemplateUsers> {
 	if (type === undefined) return {};
 	const budget = pagesPerList(2);
 	const [tags, variables] = await Promise.all([listTags(gtm, ids, budget), listVariables(gtm, ids, budget)]);
@@ -90,7 +97,7 @@ async function templateUsers(gtm: GtmClient, ids: WorkspaceInput, type: string |
 	return {
 		usedBy,
 		usedByNote: usedBy.length ? "These use the template: delete or change them first." : undefined,
-		...(complete ? {} : { partial: true, partialNote: incompleteCheckNote("template", "tags or variables") }),
+		...(complete ? {} : { partial: true as const, partialNote: incompleteCheckNote("template", "tags or variables") }),
 	};
 }
 
@@ -171,21 +178,20 @@ export const templateTools: ToolGroup = (tools) => {
 		"update_template",
 		{
 			description:
-				"Change a template's name or code; omitted ones are kept. GTM shows displayName from the code's ___INFO___. Pass get_template's fingerprint.",
+				"Replace a template's code (templateData). GTM names templates from the code's ___INFO___ displayName, so edit that to rename one. Pass get_template's fingerprint.",
 			input: workspaceInput.extend(templateIdInput).extend({
-				name: nameInput("Template").optional(),
-				templateData: templateDataInput.optional(),
+				templateData: templateDataInput,
 				fingerprint: fingerprintInput,
 			}),
 			annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
 		},
-		async ({ name, templateData, fingerprint, ...ids }, { gtm }) => {
-			if (isEmptyPatch({ name, templateData })) return fail("Nothing to update: pass name or templateData.");
+		async ({ templateData, fingerprint, ...ids }, { gtm }) => {
+			// Q36: no `name` argument: GTM ignores it and takes the name from ___INFO___ displayName.
 			// Q8: updateTemplate sends the stored fingerprint as the query parameter and in the body.
 			const { result } = await updateTemplate(
 				gtm,
 				templatePath(ids),
-				{ name, templateData },
+				{ templateData },
 				{ expectedFingerprint: fingerprint },
 			);
 			return okWrite(templateResult(result));
@@ -197,6 +203,15 @@ export const templateTools: ToolGroup = (tools) => {
 		description:
 			"Delete a custom template. Without confirm: true, only previews, listing the tags and variables that use it.",
 		related: (ids, { gtm }, found) => templateUsers(gtm, ids, templateType(found)),
+		// Q34: GTM refuses (bare 400) to delete a template that tags or variables still use.
+		rejected: async (ids, { gtm }) => {
+			const t = await templates.get(gtm, { path: templatePath(ids) });
+			const { usedBy = [], partialNote } = await templateUsers(gtm, ids, templateType(t));
+			const partial = partialNote ? ` ${partialNote}` : "";
+			return usedBy.length > 0
+				? `Nothing was deleted: GTM refuses to delete template ${ids.templateId} while it is still used by ${usedBy.join(", ")}. Delete those or change their type first, then retry.${partial}`
+				: `Nothing was deleted: GTM refused to delete template ${ids.templateId}. This usually means a tag or variable still uses it (type ${templateType(t) ?? "cvt_…"}). Find and remove that use, then retry.${partial}`;
+		},
 	});
 
 	tools.add(

@@ -3,6 +3,8 @@
 // Tool names follow Paolo's server (PLAN §6): *_google_tag_config(s).
 
 import { z } from "zod";
+import { type GtmClient, withoutRetries } from "../gtm/client";
+import { GtmApiError } from "../gtm/errors";
 import { accounts, type GtagConfig } from "../gtm/generated";
 import { getMergePut, stripServerFields } from "../gtm/merge";
 import { gtagConfigPath, workspacePath } from "../gtm/paths";
@@ -39,7 +41,29 @@ const gtagConfig = workspaceEntity({
 	row: gtagConfigRow,
 });
 
-const typeInput = z.string().trim().min(1).describe('Config type, e.g. "googtag"');
+// Q31: the config types seen live; "googtag" is a tag type, and as a config type Google
+// answers HTTP 500.
+const typeInput = z
+	.string()
+	.trim()
+	.min(1)
+	.describe(
+		'Config type as list_google_tag_configs shows it, e.g. "ogt_auto_events" or "ogt_1p_data_v2" (not "googtag")',
+	);
+
+/** The workspace's configs of this type (GTM allows one per type, Q31). */
+async function configsOfType(gtm: GtmClient, parent: string, type: string): Promise<GtagConfig[]> {
+	const list = await gtm.listAll(
+		(pageToken) => gtagConfigs.list(gtm, { parent, pageToken }),
+		(page) => page.gtagConfig,
+	);
+	return list.items.filter((g) => g.type === type);
+}
+
+function alreadyExists(workspaceId: string, type: string, existing: readonly GtagConfig[]): string {
+	const ids = existing.map((g) => g.gtagConfigId).join(", ");
+	return `Nothing was created: workspace ${workspaceId} already has a Google tag config of type "${type}" (gtagConfigId ${ids}), and GTM allows one per type (it answers a second create with HTTP 429, not a clear error). Change that one with update_google_tag_config, or delete it first (delete_google_tag_config).`;
+}
 
 export const gtagConfigTools: ToolGroup = (tools) => {
 	addListTool(tools, gtagConfig, {
@@ -57,13 +81,28 @@ export const gtagConfigTools: ToolGroup = (tools) => {
 	tools.add(
 		"create_google_tag_config",
 		{
-			description: "Create a Google tag config in a workspace. Not live until a version is published.",
+			description:
+				"Create a Google tag config in a workspace (one per type; refused if that type exists). Not live until a version is published.",
 			input: workspaceInput.extend({ type: typeInput, parameter: parametersInput.optional() }),
 			annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
 		},
 		async ({ type, parameter, ...ids }, { gtm }) => {
+			const parent = workspacePath(ids);
+			// Q31: a second config of a type fails with a 429 that retrying never clears, so look first.
+			const existing = await configsOfType(gtm, parent, type);
+			if (existing.length > 0) return fail(alreadyExists(ids.workspaceId, type, existing));
 			const body = stripServerFields<GtagConfig>({ type, parameter });
-			const result = await gtagConfigs.create(gtm, { parent: workspacePath(ids) }, body);
+			let result: GtagConfig;
+			try {
+				// Sent once: a 429 here is more likely Q31 (one made since our list) than a rate limit.
+				result = await gtagConfigs.create(withoutRetries(gtm), { parent }, body);
+			} catch (error) {
+				if (error instanceof GtmApiError && error.status === 429) {
+					const now = await configsOfType(gtm, parent, type).catch(() => []);
+					if (now.length > 0) return fail(alreadyExists(ids.workspaceId, type, now));
+				}
+				throw error;
+			}
 			return okWrite({ gtagConfig: { ...gtagConfigRow(result), fingerprint: result.fingerprint } });
 		},
 	);

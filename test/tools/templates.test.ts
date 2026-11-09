@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { LIST_PAGE_BUDGET } from "../../src/gtm/client";
 import { UNPUBLISHED_CHANGES_NOTE } from "../../src/gtm/quirks";
 import { templateInfo, templateType } from "../../src/tools/templates";
+import { errors } from "../fixtures/gtm";
 import {
 	byMethod,
 	CONTAINER_ID,
@@ -176,15 +177,24 @@ describe("update_template", () => {
 				PUT: (call) => json({ ...JSON.parse(call.body), fingerprint: "101" }),
 			}),
 		});
-		const result = await callTool("update_template", { ...WORKSPACE_ARGS, templateId: "12", name: "Renamed" });
+		const templateData = tpl("TAG", "My Pixel 2");
+		const result = await callTool("update_template", { ...WORKSPACE_ARGS, templateId: "12", templateData });
 		const [get, put] = mock.gtm().map(describeCall);
 		expect(get).toMatchObject({ method: "GET", path: TEMPLATE });
 		expect(put).toMatchObject({ method: "PUT", path: TEMPLATE, query: { fingerprint: "100" } });
-		expect(put?.body).toEqual({ ...custom, name: "Renamed" });
+		expect(put?.body).toEqual({ ...custom, templateData });
 		expect(result.json()).toMatchObject({
-			template: { name: "Renamed", fingerprint: "101" },
+			template: { name: "My Pixel", displayName: "My Pixel 2", fingerprint: "101" },
 			note: UNPUBLISHED_CHANGES_NOTE,
 		});
+	});
+
+	it("Q36 takes no name (GTM ignores it): a name-only call is refused before any request", async () => {
+		const mock = mockGtm({});
+		const result = await callTool("update_template", { ...WORKSPACE_ARGS, templateId: "12", name: "Renamed" });
+		expect(result.isError).toBe(true);
+		expect(result.text).toContain("templateData");
+		expect(mock.gtm()).toHaveLength(0);
 	});
 
 	it("Q2: a stale fingerprint fails with a conflict and sends no PUT", async () => {
@@ -204,7 +214,7 @@ describe("update_template", () => {
 		const mock = mockGtm({});
 		const result = await callTool("update_template", { ...WORKSPACE_ARGS, templateId: "12", fingerprint: "100" });
 		expect(result.isError).toBe(true);
-		expect(result.text).toBe("Nothing to update: pass name or templateData.");
+		expect(result.text).toContain("templateData");
 		expect(mock.gtm()).toHaveLength(0);
 	});
 });
@@ -258,6 +268,20 @@ describe("delete_template", () => {
 			},
 			message:
 				"Nothing was deleted. To delete this template, get the user's go-ahead, then call delete_template again with confirm: true.",
+		});
+	});
+
+	it("Q34 a bare 400 on the confirmed DELETE becomes an error naming the tags that use the template", async () => {
+		const type = `cvt_${CONTAINER_ID}_12`;
+		mockGtm({
+			[TEMPLATE]: byMethod({ GET: () => json(custom), DELETE: reply(errors.stillInUse400, 400) }),
+			[`${WORKSPACE}/tags`]: pages("tag", [[{ tagId: "97", name: "Pixel", type }]]),
+			[`${WORKSPACE}/variables`]: pages("variable", [[]]),
+		});
+		const result = await callTool("delete_template", { ...WORKSPACE_ARGS, templateId: "12", confirm: true });
+		expect(result).toMatchObject({
+			isError: true,
+			text: 'Nothing was deleted: GTM refuses to delete template 12 while it is still used by tag 97 "Pixel". Delete those or change their type first, then retry.',
 		});
 	});
 

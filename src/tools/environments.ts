@@ -3,7 +3,8 @@
 // to, to every page that loads the container with its gtm_auth / gtm_preview, so repointing,
 // deleting or reauthorizing one changes what those pages load. Those three are confirm-gated.
 // Google (Environment in generated.ts): only `user` environments can be created, deleted or
-// renamed; other types only take changes to `url` and `enableDebug`.
+// renamed; other types only take changes to `url` and `enableDebug`. Google leaves `type` out
+// of user environments (Q29), so a missing type means `user`.
 
 import { z } from "zod";
 import { accounts, type Environment } from "../gtm/generated";
@@ -25,7 +26,7 @@ export function environmentRow(e: Environment) {
 	return {
 		environmentId: e.environmentId,
 		name: e.name,
-		type: e.type,
+		type: environmentType(e),
 		url: e.url,
 		containerVersionId: e.containerVersionId,
 		workspaceId: e.workspaceId,
@@ -42,6 +43,14 @@ const editable = {
 
 /** Fields Google lets you change only on `user` environments. */
 const USER_ONLY_FIELDS = ["name", "description", "containerVersionId", "workspaceId"] as const;
+
+/**
+ * The environment's type, `user` when Google leaves it out: live, Google omits `type` on user
+ * environments and sends it only on Live, Latest and workspace ones (Q29).
+ */
+export function environmentType(e: Environment): NonNullable<Environment["type"]> {
+	return e.type ?? "user";
+}
 
 export const environmentTools: ToolGroup = (tools) => {
 	tools.add(
@@ -108,11 +117,12 @@ export const environmentTools: ToolGroup = (tools) => {
 			}
 			const path = environmentPath({ accountId, containerId, environmentId });
 			const current = await environments.get(gtm, { path });
-			if (current.type !== "user") {
+			const type = environmentType(current);
+			if (type !== "user") {
 				const refused = USER_ONLY_FIELDS.filter((f) => fields[f] !== undefined);
 				if (refused.length > 0) {
 					return fail(
-						`Nothing was changed: on a "${current.type}" environment Google only allows url and enableDebug to change, not ${refused.join(", ")}.`,
+						`Nothing was changed: on a "${type}" environment Google only allows url and enableDebug to change, not ${refused.join(", ")}.`,
 					);
 				}
 			}
