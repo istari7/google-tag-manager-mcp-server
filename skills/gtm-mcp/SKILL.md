@@ -83,14 +83,22 @@ someone else edited it: read it again and redo your change.
 
 ## Confirm-gated tools
 
-`delete_tag`, `delete_trigger`, `delete_variable`, `delete_folder`,
-`delete_google_tag_config`, `delete_workspace`, `delete_container`,
-`disable_built_in_variables`, `set_user_permission`,
-`delete_user_permission` and `publish_version` change nothing without
+Every `delete_*` tool, `publish_version`, `disable_built_in_variables`,
+`update_account`, `set_user_permission`, `delete_user_permission`, and the
+admin tools that are hard to undo (`revert_workspace_entity`,
+`resolve_workspace_conflict`, `bulk_update_workspace`, `sync_workspace`,
+`undelete_version`, `set_latest_version`, `combine_containers`,
+`move_tag_id`, `reauthorize_environment`, `link_destination`, and
+`update_environment` when it repoints) change nothing without
 `confirm: true`. Call them without it, show the user the preview, and confirm
 only after the user agrees to that specific action. `delete_container` also
 needs the container's public ID typed back. Never delete as a side effect of
 another task.
+
+Some tools are in optional tool groups the server owner may not have enabled
+(templates, zones, server-side clients, environments, admin tools). If a tool
+named here is not in your tool list, it is switched off on this server: tell
+the user, and don't try to work around it.
 
 ## Side effects to tell the user about
 

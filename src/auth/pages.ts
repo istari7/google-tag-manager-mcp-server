@@ -7,8 +7,9 @@ const SCOPE_LABELS: Record<string, string> = {
 	email: "See your email address",
 	profile: "See your name",
 	"https://www.googleapis.com/auth/tagmanager.readonly": "View your GTM containers",
-	"https://www.googleapis.com/auth/tagmanager.edit.containers": "Edit tags, triggers and variables",
-	"https://www.googleapis.com/auth/tagmanager.edit.containerversions": "Create container versions",
+	"https://www.googleapis.com/auth/tagmanager.edit.containers":
+		"Edit containers, workspaces, tags, triggers and variables",
+	"https://www.googleapis.com/auth/tagmanager.edit.containerversions": "Create and manage container versions",
 	"https://www.googleapis.com/auth/tagmanager.publish": "Publish container versions",
 	"https://www.googleapis.com/auth/tagmanager.manage.accounts": "View and manage GTM accounts",
 	"https://www.googleapis.com/auth/tagmanager.manage.users": "Manage GTM user permissions",
@@ -17,7 +18,7 @@ const SCOPE_LABELS: Record<string, string> = {
 
 /** Optional scopes and the tools that stop working without them. /setup notes the missing ones. */
 const OPTIONAL_SCOPES: Record<string, string> = {
-	"https://www.googleapis.com/auth/tagmanager.publish": "publish_version",
+	"https://www.googleapis.com/auth/tagmanager.publish": "publish_version and reauthorize_environment",
 	"https://www.googleapis.com/auth/tagmanager.delete.containers": "delete_workspace and delete_container",
 	"https://www.googleapis.com/auth/tagmanager.manage.accounts": "get_account and update_account",
 	"https://www.googleapis.com/auth/tagmanager.manage.users":

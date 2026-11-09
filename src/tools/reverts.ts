@@ -6,7 +6,19 @@
 import { z } from "zod";
 import type { GtmClient } from "../gtm/client";
 import { accounts, type Entity } from "../gtm/generated";
-import { assertGtmId, isGtmId, workspacePath } from "../gtm/paths";
+import {
+	clientPath,
+	folderPath,
+	isGtmId,
+	tagPath,
+	templatePath,
+	transformationPath,
+	triggerPath,
+	variablePath,
+	type WorkspaceIds,
+	workspacePath,
+	zonePath,
+} from "../gtm/paths";
 import type { ToolGroup } from "../mcp/registry";
 import { fail } from "../mcp/result";
 import { BUILT_IN_TYPES } from "./builtins";
@@ -54,28 +66,33 @@ const EFFECT: Record<string, string> = {
 async function revert(
 	gtm: GtmClient,
 	kind: Exclude<RevertKind, "builtInVariable">,
-	workspace: string,
+	ids: WorkspaceIds,
 	id: string,
 	fingerprint: string | undefined,
 ): Promise<Entity> {
-	const at = (segment: string) => ({ path: `${workspace}/${segment}/${assertGtmId("id", id)}`, fingerprint });
+	const at = (path: string) => ({ path, fingerprint });
 	switch (kind) {
 		case "tag":
-			return { tag: (await ws.tags.revert(gtm, at("tags"))).tag };
+			return { tag: (await ws.tags.revert(gtm, at(tagPath({ ...ids, tagId: id })))).tag };
 		case "trigger":
-			return { trigger: (await ws.triggers.revert(gtm, at("triggers"))).trigger };
+			return { trigger: (await ws.triggers.revert(gtm, at(triggerPath({ ...ids, triggerId: id })))).trigger };
 		case "variable":
-			return { variable: (await ws.variables.revert(gtm, at("variables"))).variable };
+			return { variable: (await ws.variables.revert(gtm, at(variablePath({ ...ids, variableId: id })))).variable };
 		case "folder":
-			return { folder: (await ws.folders.revert(gtm, at("folders"))).folder };
+			return { folder: (await ws.folders.revert(gtm, at(folderPath({ ...ids, folderId: id })))).folder };
 		case "zone":
-			return { zone: (await ws.zones.revert(gtm, at("zones"))).zone };
+			return { zone: (await ws.zones.revert(gtm, at(zonePath({ ...ids, zoneId: id })))).zone };
 		case "template":
-			return { customTemplate: (await ws.templates.revert(gtm, at("templates"))).template };
+			return {
+				customTemplate: (await ws.templates.revert(gtm, at(templatePath({ ...ids, templateId: id })))).template,
+			};
 		case "client":
-			return { client: (await ws.clients.revert(gtm, at("clients"))).client };
+			return { client: (await ws.clients.revert(gtm, at(clientPath({ ...ids, clientId: id })))).client };
 		case "transformation":
-			return { transformation: (await ws.transformations.revert(gtm, at("transformations"))).transformation };
+			return {
+				transformation: (await ws.transformations.revert(gtm, at(transformationPath({ ...ids, transformationId: id }))))
+					.transformation,
+			};
 	}
 }
 
@@ -134,7 +151,7 @@ export const revertTools: ToolGroup = (tools) => {
 						const r = await ws.builtInVariables.revert(gtm, { path: workspace, type: builtInType });
 						return okWrite({ reverted: { kind, id }, enabled: r?.enabled === true });
 					}
-					const after = await revert(gtm, kind, workspace, id, fingerprint);
+					const after = await revert(gtm, kind, ids, id, fingerprint);
 					const exists = Object.values(after).some((v) => v !== undefined);
 					return okWrite({
 						reverted: { kind, id },
