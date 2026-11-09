@@ -71,16 +71,21 @@ describe("tools/list", () => {
 		const destructive = tools.filter((t) => t.annotations?.destructiveHint === true).map((t) => t.name);
 		expect(destructive.sort()).toEqual([
 			"delete_container",
+			"delete_environment",
 			"delete_folder",
-			"delete_gtag_config",
+			"delete_google_tag_config",
 			"delete_tag",
 			"delete_trigger",
 			"delete_user_permission",
 			"delete_variable",
 			"delete_workspace",
+			"delete_zone",
 			"disable_built_in_variables",
+			"link_destination",
 			"publish_version",
+			"reauthorize_environment",
 			"set_user_permission",
+			"update_environment",
 		]);
 		for (const t of tools) {
 			const a = t.annotations ?? {};

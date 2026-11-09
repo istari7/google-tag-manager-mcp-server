@@ -380,8 +380,8 @@ Add an entry whenever manual testing turns up something new, with a test.
   `get_workspace_status` for the extra Google tag after creating one of these
   tags and to point it out to the user. To clean up, delete the auto-created
   Google tag with `delete_tag` and the leftover configs (seen live:
-  `ogt_auto_events`, `ogt_1p_data_v2`) with `list_gtag_configs` /
-  `delete_gtag_config`; that leaves the workspace with no trace (confirmed
+  `ogt_auto_events`, `ogt_1p_data_v2`) with `list_google_tag_configs` /
+  `delete_google_tag_config`; that leaves the workspace with no trace (confirmed
   live, 2026-11-09).
 - **Tests:** tools/gtag-configs (requests and confirm gating).
 

@@ -778,12 +778,189 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "containerId",
       "workspaceId",
     ],
-    "description": "List a workspace's Google tag configs (gtagConfig), which GTM creates with GA4, Google Ads and Floodlight tags.",
-    "name": "list_gtag_configs",
+    "description": "List the zones in a GTM workspace (GTM 360): child containers and type restrictions.",
+    "name": "list_zones",
     "required": [
       "accountId",
       "containerId",
       "workspaceId",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "zoneId",
+    ],
+    "description": "Get one zone with its boundary, child containers, type restrictions and fingerprint.",
+    "name": "get_zone",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "zoneId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "name",
+      "notes",
+      "condition",
+      "customEvaluationTriggerId",
+      "childContainer",
+      "typeRestriction",
+    ],
+    "description": "Create a zone in a workspace (GTM 360). Not live until a version is published.",
+    "name": "create_zone",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "name",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "zoneId",
+      "name",
+      "notes",
+      "condition",
+      "customEvaluationTriggerId",
+      "childContainer",
+      "typeRestriction",
+      "fingerprint",
+    ],
+    "description": "Change some fields of a zone; omitted fields are kept. Pass the fingerprint from get_zone to avoid overwriting newer edits.",
+    "name": "update_zone",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "zoneId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "zoneId",
+      "confirm",
+    ],
+    "description": "Delete a zone from a workspace. Without confirm: true, only shows what would be deleted.",
+    "name": "delete_zone",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "zoneId",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+    ],
+    "description": "List a workspace's Google tag configs (gtagConfig), which GTM creates with GA4, Google Ads and Floodlight tags.",
+    "name": "list_google_tag_configs",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "gtagConfigId",
+    ],
+    "description": "Get one Google tag config with all its parameters and fingerprint.",
+    "name": "get_google_tag_config",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "gtagConfigId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "type",
+      "parameter",
+    ],
+    "description": "Create a Google tag config in a workspace. Not live until a version is published.",
+    "name": "create_google_tag_config",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "type",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "gtagConfigId",
+      "type",
+      "parameter",
+      "fingerprint",
+    ],
+    "description": "Change a Google tag config's type or parameters; omitted fields are kept. Pass the fingerprint from get_google_tag_config.",
+    "name": "update_google_tag_config",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "gtagConfigId",
     ],
   },
   {
@@ -800,7 +977,7 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
       "confirm",
     ],
     "description": "Delete a Google tag config, e.g. one left behind after its GA4 or Ads tag was deleted. Without confirm: true, only previews.",
-    "name": "delete_gtag_config",
+    "name": "delete_google_tag_config",
     "required": [
       "accountId",
       "containerId",
@@ -879,6 +1056,179 @@ exports[`tools/list > matches the snapshot (names, descriptions, annotations, ar
     "required": [
       "accountId",
       "containerId",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+    ],
+    "description": "List a container's environments (Live, Latest, workspace previews and user environments).",
+    "name": "list_environments",
+    "required": [
+      "accountId",
+      "containerId",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "environmentId",
+    ],
+    "description": "Get an environment, with its authorization code (gtm_auth) and fingerprint.",
+    "name": "get_environment",
+    "required": [
+      "accountId",
+      "containerId",
+      "environmentId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "name",
+      "description",
+      "url",
+      "enableDebug",
+    ],
+    "description": "Create a user environment (e.g. staging) in a container. Point it at a version with update_environment.",
+    "name": "create_environment",
+    "required": [
+      "accountId",
+      "containerId",
+      "name",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "environmentId",
+      "name",
+      "description",
+      "url",
+      "enableDebug",
+      "containerVersionId",
+      "workspaceId",
+      "fingerprint",
+      "confirm",
+    ],
+    "description": "Change an environment; omitted fields are kept. Repointing it (containerVersionId/workspaceId) needs confirm: true.",
+    "name": "update_environment",
+    "required": [
+      "accountId",
+      "containerId",
+      "environmentId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "environmentId",
+      "confirm",
+    ],
+    "description": "Generate a new authorization code (gtm_auth) for an environment; the old one stops working at once. Without confirm: true, only previews.",
+    "name": "reauthorize_environment",
+    "required": [
+      "accountId",
+      "containerId",
+      "environmentId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "environmentId",
+      "confirm",
+    ],
+    "description": "Delete a user environment; pages using its snippet stop loading it. Without confirm: true, only previews.",
+    "name": "delete_environment",
+    "required": [
+      "accountId",
+      "containerId",
+      "environmentId",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+    ],
+    "description": "List the Google tag destinations (e.g. G-…, AW-…) linked to a container.",
+    "name": "list_destinations",
+    "required": [
+      "accountId",
+      "containerId",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "destinationLinkId",
+    ],
+    "description": "Get a linked destination by its destinationLinkId from list_destinations.",
+    "name": "get_destination",
+    "required": [
+      "accountId",
+      "containerId",
+      "destinationLinkId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "destinationId",
+      "confirm",
+    ],
+    "description": "Link a destination (e.g. G-…) to this container, moving it from the container it is in now. Without confirm: true, only previews.",
+    "name": "link_destination",
+    "required": [
+      "accountId",
+      "containerId",
+      "destinationId",
     ],
   },
 ]

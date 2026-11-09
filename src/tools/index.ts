@@ -4,6 +4,8 @@
 import type { ToolGroup } from "../mcp/registry";
 import { accountTools } from "./accounts";
 import { builtInTools } from "./builtins";
+import { destinationTools } from "./destinations";
+import { environmentTools } from "./environments";
 import { folderTools } from "./folders";
 import { gtagConfigTools } from "./gtag-configs";
 import { tagTools } from "./tags";
@@ -13,6 +15,7 @@ import { utilityTools } from "./utility";
 import { variableTools } from "./variables";
 import { versionTools } from "./versions";
 import { workspaceTools } from "./workspaces";
+import { zoneTools } from "./zones";
 
 export const TOOL_GROUPS: readonly ToolGroup[] = [
 	utilityTools,
@@ -24,6 +27,9 @@ export const TOOL_GROUPS: readonly ToolGroup[] = [
 	variableTools,
 	builtInTools,
 	folderTools,
-	gtagConfigTools,
+	zoneTools, // group: zones
+	gtagConfigTools, // group: gtag
 	versionTools,
+	environmentTools, // group: environments
+	destinationTools, // group: destinations
 ];
