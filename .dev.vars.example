@@ -1,0 +1,20 @@
+# Secrets. Copy to .dev.vars for `pnpm dev`. In production set each with
+# `npx wrangler secret put <NAME>` (the Deploy to Cloudflare button also asks for them).
+# `pnpm cf-typegen` reads the names below, so keep them as they are.
+# Step-by-step: docs/deploy.md and docs/google-setup.md. Check them at https://<your host>/setup.
+
+# Google OAuth client (Google Cloud console > Google Auth Platform > Clients, type "Web application").
+# Redirect URI to register: shown on /setup, i.e. https://<your host>/callback
+# (local: http://localhost:8787/callback).
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+
+# 32+ random characters. Signs the "remember this client" consent cookie.
+# Generate: node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+COOKIE_SECRET=
+
+# Who may sign in. At least one must be set, otherwise every sign-in is refused.
+# Comma-separated. ALLOWED_DOMAINS matches the Google Workspace domain (hd claim), not the
+# email suffix, so list Gmail accounts in ALLOWED_EMAILS.
+ALLOWED_EMAILS=
+ALLOWED_DOMAINS=

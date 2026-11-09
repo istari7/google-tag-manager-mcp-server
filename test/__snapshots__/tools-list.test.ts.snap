@@ -1,0 +1,661 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`tools/list > matches the snapshot (names, descriptions, annotations, arguments) 1`] = `
+[
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [],
+    "description": "Check the server is reachable.",
+    "name": "ping",
+    "required": [],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [],
+    "description": "Show which Google account is connected, the granted scopes, and when the Google token expires.",
+    "name": "auth_status",
+    "required": [],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [],
+    "description": "List the Google Tag Manager accounts the connected user can access.",
+    "name": "list_accounts",
+    "required": [],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+    ],
+    "description": "List the containers in a GTM account, with their public IDs (GTM-XXXX) and usage context.",
+    "name": "list_containers",
+    "required": [
+      "accountId",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "publicId",
+    ],
+    "description": "Find a container by its public ID (GTM-XXXX) across all accounts, returning its account and container IDs.",
+    "name": "lookup_container",
+    "required": [
+      "publicId",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+    ],
+    "description": "Get the install snippet of a web container, or the provisioning config of a server container.",
+    "name": "get_container_snippet",
+    "required": [
+      "accountId",
+      "containerId",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+    ],
+    "description": "List the workspaces in a GTM container. Edits happen in a workspace, not on the live container.",
+    "name": "list_workspaces",
+    "required": [
+      "accountId",
+      "containerId",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+    ],
+    "description": "List a workspace's pending changes and merge conflicts. Changes are not live until a version is created (create_version) and a human publishes it in the GTM UI.",
+    "name": "get_workspace_status",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "name",
+      "description",
+    ],
+    "description": "Create a workspace in a container, e.g. one per change. Containers allow few workspaces (3 on standard accounts).",
+    "name": "create_workspace",
+    "required": [
+      "accountId",
+      "containerId",
+      "name",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+    ],
+    "description": "Check that a workspace compiles by building a throwaway preview version. Saves and publishes nothing.",
+    "name": "quick_preview_workspace",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+    ],
+    "description": "List the tags in a GTM workspace: ID, name, type, folder, firing and blocking trigger IDs, paused: true if paused (absent = active).",
+    "name": "list_tags",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "tagId",
+    ],
+    "description": "Get one tag with all its parameters, triggers, consent settings and fingerprint.",
+    "name": "get_tag",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "tagId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "name",
+      "type",
+      "parameter",
+      "firingTriggerId",
+      "blockingTriggerId",
+      "setupTag",
+      "teardownTag",
+      "tagFiringOption",
+      "paused",
+      "notes",
+      "consentStatus",
+      "consentTypes",
+      "parentFolderId",
+    ],
+    "description": "Create a tag in a workspace. Create its triggers and variables first. Not live until a version is published.",
+    "name": "create_tag",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "name",
+      "type",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "tagId",
+      "name",
+      "type",
+      "parameter",
+      "firingTriggerId",
+      "blockingTriggerId",
+      "setupTag",
+      "teardownTag",
+      "tagFiringOption",
+      "paused",
+      "notes",
+      "consentStatus",
+      "consentTypes",
+      "fingerprint",
+    ],
+    "description": "Change some fields of a tag; omitted fields are kept, [] clears a list. Pass the fingerprint from get_tag to avoid overwriting newer edits.",
+    "name": "update_tag",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "tagId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "tagId",
+      "confirm",
+    ],
+    "description": "Delete a tag from a workspace. Without confirm: true, only shows what would be deleted.",
+    "name": "delete_tag",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "tagId",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+    ],
+    "description": "List the triggers in a GTM workspace: ID, name, type and folder.",
+    "name": "list_triggers",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "triggerId",
+    ],
+    "description": "Get one trigger with its conditions (filter, autoEventFilter, customEventFilter) and fingerprint.",
+    "name": "get_trigger",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "triggerId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "name",
+      "type",
+      "filter",
+      "customEventFilter",
+      "autoEventFilter",
+      "parameter",
+      "waitForTags",
+      "checkValidation",
+      "waitForTagsTimeout",
+      "eventName",
+      "interval",
+      "limit",
+      "notes",
+      "parentFolderId",
+    ],
+    "description": "Create a trigger in a workspace. See gtm://best-practices/triggers for condition shapes. Not live until a version is published.",
+    "name": "create_trigger",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "name",
+      "type",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "triggerId",
+      "name",
+      "type",
+      "filter",
+      "customEventFilter",
+      "autoEventFilter",
+      "parameter",
+      "waitForTags",
+      "checkValidation",
+      "waitForTagsTimeout",
+      "eventName",
+      "interval",
+      "limit",
+      "notes",
+      "fingerprint",
+    ],
+    "description": "Change some fields of a trigger; omitted fields are kept, [] clears a list. Pass the fingerprint from get_trigger to avoid overwriting newer edits.",
+    "name": "update_trigger",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "triggerId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "triggerId",
+      "confirm",
+    ],
+    "description": "Delete a trigger from a workspace. Without confirm: true, only shows what would be deleted and which tags use it.",
+    "name": "delete_trigger",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "triggerId",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+    ],
+    "description": "List the user-defined variables in a GTM workspace: ID, name, type and folder. Built-ins: list_built_in_variables.",
+    "name": "list_variables",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "variableId",
+    ],
+    "description": "Get one user-defined variable with all its parameters and fingerprint.",
+    "name": "get_variable",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "variableId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "name",
+      "type",
+      "parameter",
+      "notes",
+      "parentFolderId",
+    ],
+    "description": "Create a user-defined variable in a workspace (for built-ins use enable_built_in_variables). Not live until a version is published.",
+    "name": "create_variable",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "name",
+      "type",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "variableId",
+      "name",
+      "type",
+      "parameter",
+      "notes",
+      "fingerprint",
+    ],
+    "description": "Change some fields of a variable; omitted fields are kept. Pass the fingerprint from get_variable to avoid overwriting newer edits.",
+    "name": "update_variable",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "variableId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "variableId",
+      "confirm",
+    ],
+    "description": "Delete a variable from a workspace. Without confirm: true, only shows what would be deleted.",
+    "name": "delete_variable",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "variableId",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+    ],
+    "description": "List the built-in variables enabled in a GTM workspace (e.g. Page URL, Click Classes), by type and name.",
+    "name": "list_built_in_variables",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "types",
+    ],
+    "description": "Enable built-in variables (Page URL, Click URL, Form ID, …) in a workspace so conditions and tags can use {{Name}}.",
+    "name": "enable_built_in_variables",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "types",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+    ],
+    "description": "List the folders in a GTM workspace. Tags, triggers and variables point to theirs via parentFolderId.",
+    "name": "list_folders",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "name",
+      "notes",
+    ],
+    "description": "Create a folder in a workspace. Use move_entities_to_folder to put tags, triggers and variables in it.",
+    "name": "create_folder",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "name",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "folderId",
+      "tagId",
+      "triggerId",
+      "variableId",
+    ],
+    "description": "Move tags, triggers and variables into a folder. folderId "0" moves them out of their current folder.",
+    "name": "move_entities_to_folder",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "folderId",
+    ],
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "readOnlyHint": false,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "name",
+      "notes",
+    ],
+    "description": "Save a workspace's changes as a new container version. Does not publish: a human publishes it in the GTM UI. Fails if the workspace has no changes or has merge conflicts.",
+    "name": "create_version",
+    "required": [
+      "accountId",
+      "containerId",
+      "workspaceId",
+      "name",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+    ],
+    "description": "Summarise the published (live) version of a container: version ID, entity counts, and the name and type of every tag, trigger and variable.",
+    "name": "get_live_version",
+    "required": [
+      "accountId",
+      "containerId",
+    ],
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true,
+    },
+    "args": [
+      "accountId",
+      "containerId",
+      "includeDeleted",
+    ],
+    "description": "List a container's saved versions, newest first, with tag/trigger/variable counts.",
+    "name": "list_versions",
+    "required": [
+      "accountId",
+      "containerId",
+    ],
+  },
+]
+`;

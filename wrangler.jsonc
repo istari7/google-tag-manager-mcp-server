@@ -1,0 +1,49 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Self-hosting: replace the "routes" entry below with your own domain, or delete it and
+  // set "workers_dev": true (see docs/deploy.md#choose-your-address).
+  "name": "gtm-mcp",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  // global_fetch_strictly_public: required for Client ID Metadata Documents (CIMD).
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+
+  // Only reachable on the custom domain. No *.workers.dev URL, no preview URLs.
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "gtm-mcp.logizly.com", "custom_domain": true }],
+
+  // OAuth grants, encrypted token props, consent/upstream state.
+  // No id: wrangler provisions the namespace on first deploy and reuses it after.
+  "kv_namespaces": [{ "binding": "OAUTH_KV" }],
+
+  // Per-IP limits (CF-Connecting-IP), applied in src/index.ts before the OAuth provider.
+  // Approximate and per Cloudflare location. namespace_id is any integer string unique
+  // within the account. period must be 10 or 60 seconds.
+  // Note: Claude web/desktop connectors call /token and /mcp from Anthropic's servers, so
+  // several users can share one IP. Keep these generous.
+  "ratelimits": [
+    // /authorize, /callback, /register: browser sign-ins. A full login is ~5 requests.
+    { "name": "AUTH_RATE_LIMITER", "namespace_id": "4710", "simple": { "limit": 30, "period": 60 } },
+    // /token: code exchanges and refreshes, which Claude web/desktop send from shared
+    // Anthropic egress IPs, so it needs more room than the sign-in pages.
+    { "name": "TOKEN_RATE_LIMITER", "namespace_id": "4712", "simple": { "limit": 120, "period": 60 } },
+    // /mcp
+    { "name": "MCP_RATE_LIMITER", "namespace_id": "4711", "simple": { "limit": 300, "period": 60 } }
+  ],
+
+  "vars": {
+    // Our MCP access token lifetime. Shorter than Google's 60 min so clients
+    // refresh ours (and we refresh Google's) before Google's expires.
+    "ACCESS_TOKEN_TTL_SECONDS": "3000",
+    // Space-separated Google scopes requested at sign-in (openid/email/profile are always added).
+    "GOOGLE_SCOPES": "https://www.googleapis.com/auth/tagmanager.readonly https://www.googleapis.com/auth/tagmanager.edit.containers https://www.googleapis.com/auth/tagmanager.edit.containerversions https://www.googleapis.com/auth/tagmanager.manage.accounts https://www.googleapis.com/auth/tagmanager.manage.users"
+  },
+  // Secrets (wrangler secret put): GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
+  // COOKIE_SECRET, ALLOWED_EMAILS, ALLOWED_DOMAINS. See .dev.vars.example.
+
+  // docs/best-practices/*.md are bundled as text and served as MCP resources (src/resources/).
+  "rules": [{ "type": "Text", "globs": ["**/*.md"], "fallthrough": true }],
+
+  "observability": { "enabled": true }
+}

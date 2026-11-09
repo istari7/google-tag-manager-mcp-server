@@ -1,0 +1,24 @@
+name: GTM codegen drift
+
+# Weekly: regenerate src/gtm/generated.ts from Google's Discovery doc and fail on drift.
+# Scheduled, not per-PR, so a Google change doesn't break unrelated PRs.
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gen-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm gen:check

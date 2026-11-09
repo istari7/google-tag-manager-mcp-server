@@ -1,0 +1,33 @@
+{
+  "name": "gtm-mcp",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.8.1",
+  "scripts": {
+    "dev": "wrangler dev --infer-origin-from-routes=false",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "cf-typegen": "wrangler types --env-file .dev.vars.example",
+    "test": "vitest run",
+    "lint": "biome check",
+    "format": "biome check --write",
+    "gen": "node scripts/gen-gtm.ts",
+    "gen:check": "node scripts/gen-gtm.ts --check",
+    "tools-report": "node scripts/tools-report.ts"
+  },
+  "dependencies": {
+    "@cloudflare/workers-oauth-provider": "1.2.4",
+    "@modelcontextprotocol/server": "2.4.0",
+    "agents": "0.33.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.6",
+    "@cloudflare/vitest-plugin": "1.6.0",
+    "@types/node": "26.6.6",
+    "typescript": "7.0.2",
+    "vitest": "4.1.12",
+    "wrangler": "4.158.0"
+  }
+}
